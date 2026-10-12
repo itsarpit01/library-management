@@ -1,0 +1,79 @@
+import mongoose from "mongoose";
+import PurchaseRequest from "../models/PurchaseRequest.js";
+
+const checkId = (id, res) => {
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(400).json({ message: "Invalid request id" });
+    return false;
+  }
+  return true;
+};
+
+// POST /api/purchase-requests (purchaser)
+export const createRequest = async (req, res) => {
+  const request = await PurchaseRequest.create({
+    ...req.body,
+    requestedBy: req.user._id,
+  });
+  res.status(201).json(request);
+};
+
+// GET /api/purchase-requests/my (purchaser)
+export const getMyRequests = async (req, res) => {
+  const filter = { requestedBy: req.user._id };
+  if (req.query.status) filter.status = req.query.status;
+
+  const requests = await PurchaseRequest.find(filter)
+    .sort({ createdAt: -1 })
+    .populate("reviewedBy", "name");
+  res.json(requests);
+};
+
+// DELETE /api/purchase-requests/:id (purchaser, sirf apna pending)
+export const cancelRequest = async (req, res) => {
+  if (!checkId(req.params.id, res)) return;
+
+  const deleted = await PurchaseRequest.findOneAndDelete({
+    _id: req.params.id,
+    requestedBy: req.user._id,
+    status: "pending",
+  });
+
+  if (!deleted) {
+    return res.status(404).json({ message: "Pending request not found" });
+  }
+  res.json({ message: "Request cancelled" });
+};
+
+// GET /api/purchase-requests?status=pending (librarian)
+export const getAllRequests = async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+
+  const requests = await PurchaseRequest.find(filter)
+    .sort({ createdAt: -1 })
+    .populate("requestedBy", "name email")
+    .populate("reviewedBy", "name");
+  res.json(requests);
+};
+
+// PATCH /api/purchase-requests/:id/review (librarian)
+export const reviewRequest = async (req, res) => {
+  if (!checkId(req.params.id, res)) return;
+  const { status, reviewNote } = req.body;
+
+  // Atomic: sirf pending hi update hoga, double review nahi hoga
+  const updated = await PurchaseRequest.findOneAndUpdate(
+    { _id: req.params.id, status: "pending" },
+    { status, reviewNote, reviewedBy: req.user._id, reviewedAt: new Date() },
+    { new: true }
+  );
+
+  if (!updated) {
+    const exists = await PurchaseRequest.exists({ _id: req.params.id });
+    return exists
+      ? res.status(409).json({ message: "Request already reviewed" })
+      : res.status(404).json({ message: "Request not found" });
+  }
+  res.json(updated);
+};

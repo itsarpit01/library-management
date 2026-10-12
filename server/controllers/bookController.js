@@ -1,4 +1,5 @@
 import Book from "../models/Book.js";
+import Issue from "../models/Issue.js";
 
 // GET /api/books
 export const getBooks = async (req, res) => {
@@ -55,9 +56,14 @@ export const updateBook = async (req, res) => {
     Object.assign(book, rest);
 
     if (totalCopies !== undefined) {
-      const diff = totalCopies - book.totalCopies;
+      const issuedCount = book.totalCopies - book.availableCopies;
+      if (totalCopies < issuedCount) {
+        return res.status(400).json({
+          message: `${issuedCount} copies are currently issued, total copies cannot be less than that`,
+        });
+      }
       book.totalCopies = totalCopies;
-      book.availableCopies = Math.max(0, book.availableCopies + diff);
+      book.availableCopies = totalCopies - issuedCount;
     }
 
     const updated = await book.save();
@@ -70,6 +76,13 @@ export const updateBook = async (req, res) => {
 // DELETE /api/books/:id (librarian)
 export const deleteBook = async (req, res) => {
   try {
+    const activeIssues = await Issue.countDocuments({ book: req.params.id, status: "issued" });
+    if (activeIssues > 0) {
+      return res.status(400).json({
+        message: `Cannot delete: ${activeIssues} copy(ies) currently issued`,
+      });
+    }
+
     const book = await Book.findByIdAndDelete(req.params.id);
     if (!book) return res.status(404).json({ message: "Book not found" });
     res.json({ message: "Book deleted successfully" });
