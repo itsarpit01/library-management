@@ -5,11 +5,12 @@ import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import LibrarianHome from "./pages/LibrarianHome";
-import PurchaserHome from "./pages/PurchaserHome";
-import ComingSoon from "./pages/ComingSoon";
 import LibrarianBooks from "./pages/LibrarianBooks";
 import LibrarianIssues from "./pages/LibrarianIssues";
 import LibrarianRequests from "./pages/LibrarianRequests";
+import PurchaserHome from "./pages/PurchaserHome";
+import PurchaserBooks from "./pages/PurchaserBooks";
+import PurchaserIssues from "./pages/PurchaserIssues";
 import PurchaserRequests from "./pages/PurchaserRequests";
 
 function RootRedirect() {
@@ -44,8 +45,8 @@ export default function App() {
       <Route element={<ProtectedRoute roles={["purchaser"]} />}>
         <Route path="/purchaser" element={<AppLayout />}>
           <Route index element={<PurchaserHome />} />
-          <Route path="books" element={<ComingSoon title="Browse Books" />} />
-          <Route path="my-issues" element={<ComingSoon title="My Issues" />} />
+          <Route path="books" element={<PurchaserBooks />} />
+          <Route path="my-issues" element={<PurchaserIssues />} />
           <Route path="requests" element={<PurchaserRequests />} />
         </Route>
       </Route>
