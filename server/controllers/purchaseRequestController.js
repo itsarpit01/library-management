@@ -13,14 +13,14 @@ const checkId = (id, res) => {
 export const createRequest = async (req, res) => {
   const request = await PurchaseRequest.create({
     ...req.body,
-    requestedBy: req.user._id,
+    requestedBy: req.user.id,
   });
   res.status(201).json(request);
 };
 
 // GET /api/purchase-requests/my (purchaser)
 export const getMyRequests = async (req, res) => {
-  const filter = { requestedBy: req.user._id };
+  const filter = { requestedBy: req.user.id };
   if (req.query.status) filter.status = req.query.status;
 
   const requests = await PurchaseRequest.find(filter)
@@ -35,7 +35,7 @@ export const cancelRequest = async (req, res) => {
 
   const deleted = await PurchaseRequest.findOneAndDelete({
     _id: req.params.id,
-    requestedBy: req.user._id,
+    requestedBy: req.user.id,
     status: "pending",
   });
 
@@ -65,7 +65,7 @@ export const reviewRequest = async (req, res) => {
   // Atomic: sirf pending hi update hoga, double review nahi hoga
   const updated = await PurchaseRequest.findOneAndUpdate(
     { _id: req.params.id, status: "pending" },
-    { status, reviewNote, reviewedBy: req.user._id, reviewedAt: new Date() },
+    { status, reviewNote, reviewedBy: req.user.id, reviewedAt: new Date() },
     { new: true }
   );
 

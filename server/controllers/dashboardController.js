@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Book from "../models/Book.js";
 import Issue from "../models/Issue.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
@@ -62,7 +63,8 @@ export const getLibrarianStats = async (req, res) => {
 // GET /api/dashboard/my (purchaser)
 export const getPurchaserStats = async (req, res) => {
   const grouped = await PurchaseRequest.aggregate([
-    { $match: { requestedBy: req.user._id } },
+    // aggregate string id ko auto-cast nahi karta, isliye ObjectId banana zaroori hai
+    { $match: { requestedBy: new mongoose.Types.ObjectId(req.user.id) } },
     { $group: { _id: "$status", count: { $sum: 1 } } },
   ]);
 
@@ -70,6 +72,9 @@ export const getPurchaserStats = async (req, res) => {
   grouped.forEach((g) => (counts[g._id] = g.count));
 
   res.json({
-    purchaseRequests: { ...counts, total: counts.pending + counts.approved + counts.rejected },
+    purchaseRequests: {
+      ...counts,
+      total: counts.pending + counts.approved + counts.rejected,
+    },
   });
 };
