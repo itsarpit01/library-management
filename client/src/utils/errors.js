@@ -7,3 +7,13 @@ export function getErrorMessage(err, fallback = "Something went wrong") {
   if (typeof first === "string") return first;
   return first?.message || data?.message || fallback;
 }
+
+// Backend ke validation errors ko { field: message } object mein badalta hai
+export function getFieldErrors(err) {
+  const errors = err?.response?.data?.errors;
+  if (!errors) return {};
+  if (Array.isArray(errors)) {
+    return Object.fromEntries(errors.map((e) => [e.field, e.message]));
+  }
+  return errors;
+}
