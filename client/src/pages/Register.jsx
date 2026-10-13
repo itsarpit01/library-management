@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { getErrorMessage } from "../utils/errors";
+import { getErrorMessage, getFieldErrors } from "../utils/errors";
+import { registerFormSchema } from "../schemas/authSchema";
 import AuthLayout from "../components/AuthLayout";
 import PasswordInput from "../components/PasswordInput";
 
@@ -10,28 +11,40 @@ export default function Register() {
   const { register } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-    role: "purchaser",
-  });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) =>
+  const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    setErrors((er) => ({ ...er, [e.target.name]: undefined }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const parsed = registerFormSchema.safeParse(form);
+    if (!parsed.success) {
+      const fe = {};
+      parsed.error.issues.forEach((i) => {
+        if (!fe[i.path[0]]) fe[i.path[0]] = i.message;
+      });
+      setErrors(fe);
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(form.name, form.email, form.password, form.role);
+      // role nahi bhejte: backend hamesha purchaser banata hai
+      await register(parsed.data.name, parsed.data.email, parsed.data.password);
       toast.success("Account created. Please login.");
       navigate("/login", { replace: true });
     } catch (err) {
-      setError(getErrorMessage(err, "Registration failed"));
+      const fe = getFieldErrors(err);
+      if (Object.keys(fe).length) setErrors(fe);
+      else setError(getErrorMessage(err, "Registration failed"));
     } finally {
       setLoading(false);
     }
@@ -39,7 +52,7 @@ export default function Register() {
 
   return (
     <AuthLayout>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <h2>Create account</h2>
         <p className="sub">Join the library in under a minute.</p>
 
@@ -53,8 +66,8 @@ export default function Register() {
             placeholder="Your full name"
             value={form.name}
             onChange={handleChange}
-            required
           />
+          {errors.name && <span className="error-text">{errors.name}</span>}
         </div>
 
         <div className="field">
@@ -66,8 +79,8 @@ export default function Register() {
             placeholder="you@example.com"
             value={form.email}
             onChange={handleChange}
-            required
           />
+          {errors.email && <span className="error-text">{errors.email}</span>}
         </div>
 
         <div className="field">
@@ -78,19 +91,14 @@ export default function Register() {
             placeholder="Create a strong password"
             value={form.password}
             onChange={handleChange}
-            required
           />
-          <span className="hint">
-            Min 8 characters with capital, small letter, number and special character.
-          </span>
-        </div>
-
-        <div className="field">
-          <label htmlFor="role">Role</label>
-          <select id="role" name="role" value={form.role} onChange={handleChange}>
-            <option value="purchaser">Purchaser</option>
-            <option value="librarian">Librarian</option>
-          </select>
+          {errors.password ? (
+            <span className="error-text">{errors.password}</span>
+          ) : (
+            <span className="hint">
+              Min 8 characters with capital, small letter, number and special character.
+            </span>
+          )}
         </div>
 
         <button className="btn btn-block" type="submit" disabled={loading}>
