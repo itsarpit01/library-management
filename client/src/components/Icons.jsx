@@ -80,3 +80,36 @@ export const ClockIcon = make(
     <path d="M12 6v6l4 2" />
   </>
 );
+export const PlusIcon = make(
+  <>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </>
+);
+export const SearchIcon = make(
+  <>
+    <circle cx="11" cy="11" r="8" />
+    <path d="M21 21l-4.3-4.3" />
+  </>
+);
+export const EditIcon = make(
+  <>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  </>
+);
+export const TrashIcon = make(
+  <>
+    <path d="M3 6h18" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+  </>
+);
+export const CloseIcon = make(
+  <>
+    <path d="M18 6L6 18" />
+    <path d="M6 6l12 12" />
+  </>
+);

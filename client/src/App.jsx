@@ -7,6 +7,7 @@ import Register from "./pages/Register";
 import LibrarianHome from "./pages/LibrarianHome";
 import PurchaserHome from "./pages/PurchaserHome";
 import ComingSoon from "./pages/ComingSoon";
+import LibrarianBooks from "./pages/LibrarianBooks";
 
 function RootRedirect() {
   const { isAuthenticated, user } = useAuth();
@@ -30,7 +31,7 @@ export default function App() {
       <Route element={<ProtectedRoute roles={["librarian"]} />}>
         <Route path="/librarian" element={<AppLayout />}>
           <Route index element={<LibrarianHome />} />
-          <Route path="books" element={<ComingSoon title="Books" />} />
+          <Route path="books" element={<LibrarianBooks />} />
           <Route path="issues" element={<ComingSoon title="Issue / Return" />} />
           <Route path="requests" element={<ComingSoon title="Purchase Requests" />} />
         </Route>
