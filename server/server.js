@@ -1,11 +1,10 @@
+import "dotenv/config"; // sabse pehle, taaki baaki imports ko env mile
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./config/db.js";
 import routes from "./routes/index.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
-dotenv.config();
 connectDB();
 
 const app = express();
@@ -17,7 +16,7 @@ app.get("/", (req, res) => {
   res.send("Library API is running...");
 });
 
-// Saare API routes: /api/auth/..., /api/books/..., /api/purchase-requests/...
+// /api/auth/..., /api/books/..., /api/issues/...
 app.use("/api", routes);
 
 // Hamesha sabse last mein, routes ke baad
