@@ -74,3 +74,9 @@ export const EyeOffIcon = make(
   </>
 );
 export const CheckIcon = make(<path d="M20 6L9 17l-5-5" />);
+export const ClockIcon = make(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 6v6l4 2" />
+  </>
+);
