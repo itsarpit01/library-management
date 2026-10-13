@@ -113,3 +113,16 @@ export const CloseIcon = make(
     <path d="M6 6l12 12" />
   </>
 );
+export const ReturnIcon = make(
+  <>
+    <path d="M9 14L4 9l5-5" />
+    <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+  </>
+);
+export const XIcon = make(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M15 9l-6 6" />
+    <path d="M9 9l6 6" />
+  </>
+);

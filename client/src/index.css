@@ -287,3 +287,17 @@ tr:last-child td { border-bottom: none; }
 .modal-head h3 { margin: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab {
+  padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--muted); font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.tab:hover { color: var(--primary); }
+.tab.active { background: var(--soft); color: var(--primary); border-color: var(--soft); }
+
+/* ---------- Request detail ---------- */
+.detail-list { display: grid; gap: 8px; }
+.detail-list p { display: flex; gap: 12px; font-size: 14px; }
+.detail-list span { width: 110px; flex-shrink: 0; color: var(--muted); font-weight: 600; }

@@ -8,6 +8,9 @@ import LibrarianHome from "./pages/LibrarianHome";
 import PurchaserHome from "./pages/PurchaserHome";
 import ComingSoon from "./pages/ComingSoon";
 import LibrarianBooks from "./pages/LibrarianBooks";
+import LibrarianIssues from "./pages/LibrarianIssues";
+import LibrarianRequests from "./pages/LibrarianRequests";
+import PurchaserRequests from "./pages/PurchaserRequests";
 
 function RootRedirect() {
   const { isAuthenticated, user } = useAuth();
@@ -32,8 +35,8 @@ export default function App() {
         <Route path="/librarian" element={<AppLayout />}>
           <Route index element={<LibrarianHome />} />
           <Route path="books" element={<LibrarianBooks />} />
-          <Route path="issues" element={<ComingSoon title="Issue / Return" />} />
-          <Route path="requests" element={<ComingSoon title="Purchase Requests" />} />
+          <Route path="issues" element={<LibrarianIssues />} />
+          <Route path="requests" element={<LibrarianRequests />} />
         </Route>
       </Route>
 
@@ -43,7 +46,7 @@ export default function App() {
           <Route index element={<PurchaserHome />} />
           <Route path="books" element={<ComingSoon title="Browse Books" />} />
           <Route path="my-issues" element={<ComingSoon title="My Issues" />} />
-          <Route path="requests" element={<ComingSoon title="My Requests" />} />
+          <Route path="requests" element={<PurchaserRequests />} />
         </Route>
       </Route>
 
