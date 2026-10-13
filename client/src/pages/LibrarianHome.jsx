@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
-import { useAuth } from "../context/AuthContext";
 
 export default function LibrarianHome() {
-  const { user, logout } = useAuth();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -11,10 +9,16 @@ export default function LibrarianHome() {
   }, []);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Librarian: {user.name}</h2>
-      <button onClick={logout}>Logout</button>
-      <pre>{JSON.stringify(stats, null, 2)}</pre>
-    </div>
+    <>
+      <div className="page-head">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Overview of your library.</p>
+        </div>
+      </div>
+      <div className="card">
+        <pre style={{ margin: 0 }}>{JSON.stringify(stats, null, 2)}</pre>
+      </div>
+    </>
   );
 }

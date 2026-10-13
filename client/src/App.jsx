@@ -1,10 +1,12 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import LibrarianHome from "./pages/LibrarianHome";
 import PurchaserHome from "./pages/PurchaserHome";
+import ComingSoon from "./pages/ComingSoon";
 
 function RootRedirect() {
   const { isAuthenticated, user } = useAuth();
@@ -26,12 +28,22 @@ export default function App() {
 
       {/* Librarian group */}
       <Route element={<ProtectedRoute roles={["librarian"]} />}>
-        <Route path="/librarian" element={<LibrarianHome />} />
+        <Route path="/librarian" element={<AppLayout />}>
+          <Route index element={<LibrarianHome />} />
+          <Route path="books" element={<ComingSoon title="Books" />} />
+          <Route path="issues" element={<ComingSoon title="Issue / Return" />} />
+          <Route path="requests" element={<ComingSoon title="Purchase Requests" />} />
+        </Route>
       </Route>
 
       {/* Purchaser group */}
       <Route element={<ProtectedRoute roles={["purchaser"]} />}>
-        <Route path="/purchaser" element={<PurchaserHome />} />
+        <Route path="/purchaser" element={<AppLayout />}>
+          <Route index element={<PurchaserHome />} />
+          <Route path="books" element={<ComingSoon title="Browse Books" />} />
+          <Route path="my-issues" element={<ComingSoon title="My Issues" />} />
+          <Route path="requests" element={<ComingSoon title="My Requests" />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
