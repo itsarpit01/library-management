@@ -2,7 +2,8 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { BookIcon, DashboardIcon, IssueIcon, RequestIcon,LogoutIcon, MenuIcon,} from "./Icons";
+import ConfirmModal from "./ConfirmModal";
+import { BookIcon, DashboardIcon, IssueIcon, RequestIcon, LogoutIcon, MenuIcon } from "./Icons";
 
 const NAV = {
   librarian: [
@@ -24,10 +25,13 @@ export default function AppLayout() {
   const toast = useToast();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const links = NAV[user.role] || [];
 
   const handleLogout = () => {
+    setConfirmLogout(false);
+    setOpen(false);
     logout();
     toast.info("Logged out");
     navigate("/login", { replace: true });
@@ -82,7 +86,7 @@ export default function AppLayout() {
               <span>{user.role}</span>
             </div>
             <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
-            <button className="btn btn-soft btn-sm" onClick={handleLogout}>
+            <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>
               <LogoutIcon size={16} /> Logout
             </button>
           </div>
@@ -92,6 +96,17 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {confirmLogout && (
+        <ConfirmModal
+          title="Logout"
+          message="Are you sure you want to logout?"
+          confirmText="Logout"
+          danger
+          onClose={() => setConfirmLogout(false)}
+          onConfirm={handleLogout}
+        />
+      )}
     </div>
   );
 }
