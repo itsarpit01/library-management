@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
@@ -81,11 +81,13 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar-right">
-            <div className="user-meta">
-              <strong>{user.name}</strong>
-              <span>{user.role}</span>
-            </div>
-            <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
+            <Link to={`/${user.role}/profile`} className="profile-link" title="My profile">
+              <div className="user-meta">
+                <strong>{user.name}</strong>
+                <span>{user.role}</span>
+              </div>
+              <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
+            </Link>
             <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>
               <LogoutIcon size={16} /> Logout
             </button>

@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Profile from "./pages/Profile";
 import LibrarianHome from "./pages/LibrarianHome";
 import LibrarianBooks from "./pages/LibrarianBooks";
 import LibrarianIssues from "./pages/LibrarianIssues";
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="books" element={<LibrarianBooks />} />
           <Route path="issues" element={<LibrarianIssues />} />
           <Route path="requests" element={<LibrarianRequests />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Route>
 
@@ -48,6 +50,7 @@ export default function App() {
           <Route path="books" element={<PurchaserBooks />} />
           <Route path="my-issues" element={<PurchaserIssues />} />
           <Route path="requests" element={<PurchaserRequests />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Route>
 

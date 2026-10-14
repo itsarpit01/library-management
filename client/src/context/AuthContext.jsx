@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import api from "../api/axios";
 
 const AuthContext = createContext(null);
+
 const VALID_ROLES = ["librarian", "purchaser"];
 
 const readUser = () => {
@@ -26,13 +27,14 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (name, email, password) => {
-    const { data } = await api.post("/auth/register", {
-      name,
-      email,
-      password,
-      
-    });
+    const { data } = await api.post("/auth/register", { name, email, password });
     return data;
+  };
+
+  const updateUser = (changes) => {
+    const next = { ...user, ...changes };
+    localStorage.setItem("user", JSON.stringify(next));
+    setUser(next);
   };
 
   const logout = () => {
@@ -48,6 +50,7 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("auth:logout", logout);
   }, []);
 
+  // Token ho aur role valid ho, tabhi logged in maano (redirect loop se bachne ke liye)
   const validRole = VALID_ROLES.includes(user?.role);
 
   return (
@@ -58,6 +61,7 @@ export function AuthProvider({ children }) {
         isAuthenticated: !!token && validRole,
         login,
         register,
+        updateUser,
         logout,
       }}
     >
@@ -66,4 +70,5 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

@@ -30,3 +30,12 @@ export const registerLimiter = rateLimit({
   legacyHeaders: false,
   handler: handler("Too many accounts created, please try again later"),
 });
+// Change password: 15 minute mein 5 galat attempts
+export const passwordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.PASSWORD_LIMIT_MAX) || 5,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many attempts, please try again in 15 minutes"),
+});
