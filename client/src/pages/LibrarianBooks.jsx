@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
@@ -16,6 +16,7 @@ export default function LibrarianBooks() {
   const [books, setBooks] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
+  const [firstLoad, setFirstLoad] = useState(true);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -30,12 +31,11 @@ export default function LibrarianBooks() {
   const debouncedSearch = useDebounce(search);
   const debouncedCategory = useDebounce(category);
 
-  // Filter badalne par page 1 par jao
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, debouncedCategory, available, sort]);
+  // Sirf sabse latest request ka response use hoga
+  const requestId = useRef(0);
 
   const loadBooks = useCallback(async () => {
+    const myId = ++requestId.current;
     setLoading(true);
     try {
       const params = { sort, page, limit: LIMIT };
@@ -44,12 +44,17 @@ export default function LibrarianBooks() {
       if (available) params.available = available;
 
       const res = await api.get("/books", { params });
+      if (myId !== requestId.current) return; // purana response, ignore
       setBooks(res.data.data);
       setPagination(res.data.pagination);
     } catch (err) {
+      if (myId !== requestId.current) return;
       toast.error(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (myId === requestId.current) {
+        setLoading(false);
+        setFirstLoad(false);
+      }
     }
   }, [debouncedSearch, debouncedCategory, available, sort, page, toast]);
 
@@ -97,21 +102,41 @@ export default function LibrarianBooks() {
           <input
             placeholder="Search title, author or ISBN"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <input
           className="toolbar-input"
           placeholder="Category"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(1);
+          }}
         />
-        <select className="toolbar-input" value={available} onChange={(e) => setAvailable(e.target.value)}>
+        <select
+          className="toolbar-input"
+          value={available}
+          onChange={(e) => {
+            setAvailable(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="">All books</option>
           <option value="true">Available</option>
           <option value="false">Not available</option>
         </select>
-        <select className="toolbar-input" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select
+          className="toolbar-input"
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="-createdAt">Newest first</option>
           <option value="createdAt">Oldest first</option>
           <option value="title">Title A-Z</option>
@@ -122,12 +147,15 @@ export default function LibrarianBooks() {
         </select>
       </div>
 
-      {loading ? (
+      {firstLoad && loading ? (
         <p className="empty">Loading books...</p>
       ) : books.length === 0 ? (
         <p className="empty">No books found.</p>
       ) : (
-        <div className="book-grid">
+        <div
+          className="book-grid"
+          style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}
+        >
           {books.map((b) => (
             <BookCard
               key={b._id}
@@ -149,7 +177,11 @@ export default function LibrarianBooks() {
 
       {pagination.totalPages > 1 && (
         <div className="pagination">
-          <button className="btn btn-soft btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+          <button
+            className="btn btn-soft btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
             Previous
           </button>
           <span>
@@ -166,7 +198,11 @@ export default function LibrarianBooks() {
       )}
 
       {formBook !== undefined && (
-        <BookFormModal book={formBook} onClose={() => setFormBook(undefined)} onSaved={handleSaved} />
+        <BookFormModal
+          book={formBook}
+          onClose={() => setFormBook(undefined)}
+          onSaved={handleSaved}
+        />
       )}
 
       {toDelete && (

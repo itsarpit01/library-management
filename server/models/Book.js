@@ -13,7 +13,7 @@ const bookSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Filter aur default sort ko tez karne ke liye
+
 bookSchema.index({ category: 1 });
 bookSchema.index({ createdAt: -1 });
 

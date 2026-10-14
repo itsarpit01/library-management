@@ -11,7 +11,7 @@ const populateIssue = (query) =>
     .populate("member", "name email")
     .populate("issuedBy", "name");
 
-// POST /api/issues (librarian)
+
 export const issueBook = async (req, res) => {
   const { bookId, memberId } = req.body;
   const days = req.body.days ?? 14;
@@ -32,7 +32,6 @@ export const issueBook = async (req, res) => {
       .json({ message: "This member already has this book issued" });
   }
 
-  // Atomic: copy tabhi kam hogi jab availableCopies > 0 ho
   const book = await Book.findOneAndUpdate(
     { _id: bookId, availableCopies: { $gt: 0 } },
     { $inc: { availableCopies: -1 } },
@@ -57,13 +56,13 @@ export const issueBook = async (req, res) => {
     const populated = await populateIssue(Issue.findById(issue._id));
     res.status(201).json(withOverdueInfo(populated));
   } catch (err) {
-    // Issue na bane to copy wapas jodo (rollback), error errorHandler ko jayega
+
     await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
     throw err;
   }
 };
 
-// PATCH /api/issues/:id/return (librarian)
+
 export const returnBook = async (req, res) => {
   const issue = await Issue.findById(req.params.id);
   if (!issue) {
@@ -75,7 +74,7 @@ export const returnBook = async (req, res) => {
 
   const now = new Date();
 
-  // status: "issued" condition se double return nahi hoga
+
   const updated = await Issue.findOneAndUpdate(
     { _id: issue._id, status: "issued" },
     { status: "returned", returnDate: now, fine: calcFine(issue.dueDate, now) },
@@ -91,7 +90,7 @@ export const returnBook = async (req, res) => {
   res.json(withOverdueInfo(populated));
 };
 
-// GET /api/issues?status=issued|returned|overdue (librarian)
+
 export const getIssues = async (req, res) => {
   const { status } = req.query;
   const filter = {};
@@ -108,7 +107,7 @@ export const getIssues = async (req, res) => {
   res.json(issues.map(withOverdueInfo));
 };
 
-// GET /api/issues/my (purchaser: sirf apni)
+
 export const getMyIssues = async (req, res) => {
   const issues = await populateIssue(
     Issue.find({ member: req.user.id }).sort({ createdAt: -1 })

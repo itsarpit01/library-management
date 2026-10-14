@@ -14,12 +14,10 @@ import {
 
 const router = express.Router();
 
-// protect routes/index.js mein pehle se lagta hai
 
-// Group 1: purchaser (apni issues)
 router.get("/my", authorizeRoles("purchaser"), getMyIssues);
 
-// Group 2: neeche ke sab routes sirf librarian ke liye
+
 router.use(authorizeRoles("librarian"));
 
 router.route("/").get(getIssues).post(validate(issueBookSchema), issueBook);

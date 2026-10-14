@@ -9,7 +9,7 @@ const checkId = (id, res) => {
   return true;
 };
 
-// POST /api/purchase-requests (purchaser)
+
 export const createRequest = async (req, res) => {
   const request = await PurchaseRequest.create({
     ...req.body,
@@ -18,7 +18,7 @@ export const createRequest = async (req, res) => {
   res.status(201).json(request);
 };
 
-// GET /api/purchase-requests/my (purchaser)
+
 export const getMyRequests = async (req, res) => {
   const filter = { requestedBy: req.user.id };
   if (req.query.status) filter.status = req.query.status;
@@ -29,7 +29,7 @@ export const getMyRequests = async (req, res) => {
   res.json(requests);
 };
 
-// DELETE /api/purchase-requests/:id (purchaser, sirf apna pending)
+
 export const cancelRequest = async (req, res) => {
   if (!checkId(req.params.id, res)) return;
 
@@ -45,7 +45,6 @@ export const cancelRequest = async (req, res) => {
   res.json({ message: "Request cancelled" });
 };
 
-// GET /api/purchase-requests?status=pending (librarian)
 export const getAllRequests = async (req, res) => {
   const filter = {};
   if (req.query.status) filter.status = req.query.status;
@@ -57,12 +56,10 @@ export const getAllRequests = async (req, res) => {
   res.json(requests);
 };
 
-// PATCH /api/purchase-requests/:id/review (librarian)
 export const reviewRequest = async (req, res) => {
   if (!checkId(req.params.id, res)) return;
   const { status, reviewNote } = req.body;
 
-  // Atomic: sirf pending hi update hoga, double review nahi hoga
   const updated = await PurchaseRequest.findOneAndUpdate(
     { _id: req.params.id, status: "pending" },
     { status, reviewNote, reviewedBy: req.user.id, reviewedAt: new Date() },

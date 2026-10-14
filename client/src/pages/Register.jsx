@@ -37,7 +37,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // role nahi bhejte: backend hamesha purchaser banata hai
+     
       await register(parsed.data.name, parsed.data.email, parsed.data.password);
       toast.success("Account created. Please login.");
       navigate("/login", { replace: true });

@@ -9,7 +9,6 @@ export default function ProtectedRoute({ roles }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Galat role: us user ke apne home par bhejo (loop nahi banega)
   if (roles && !roles.includes(user.role)) {
     const home = user.role === "librarian" ? "/librarian" : "/purchaser";
     return <Navigate to={home} replace />;

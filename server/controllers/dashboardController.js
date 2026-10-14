@@ -3,7 +3,6 @@ import Book from "../models/Book.js";
 import Issue from "../models/Issue.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
 
-// GET /api/dashboard (librarian)
 export const getLibrarianStats = async (req, res) => {
   const now = new Date();
   const overdueFilter = { status: "issued", dueDate: { $lt: now } };
@@ -60,10 +59,9 @@ export const getLibrarianStats = async (req, res) => {
   });
 };
 
-// GET /api/dashboard/my (purchaser)
 export const getPurchaserStats = async (req, res) => {
   const grouped = await PurchaseRequest.aggregate([
-    // aggregate string id ko auto-cast nahi karta, isliye ObjectId banana zaroori hai
+  
     { $match: { requestedBy: new mongoose.Types.ObjectId(req.user.id) } },
     { $group: { _id: "$status", count: { $sum: 1 } } },
   ]);

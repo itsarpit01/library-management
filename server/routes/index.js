@@ -9,10 +9,10 @@ import dashboardRoutes from "./dashboardRoutes.js";
 
 const router = express.Router();
 
-// Public routes (login/register)
+
 router.use("/auth", authRoutes);
 
-// Is line ke baad ke sab routes protected hain
+
 router.use(protect);
 
 router.use("/books", bookRoutes);

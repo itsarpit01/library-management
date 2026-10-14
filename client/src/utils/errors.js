@@ -8,7 +8,6 @@ export function getErrorMessage(err, fallback = "Something went wrong") {
   return first?.message || data?.message || fallback;
 }
 
-// Backend ke validation errors ko { field: message } object mein badalta hai
 export function getFieldErrors(err) {
   const errors = err?.response?.data?.errors;
   if (!errors) return {};

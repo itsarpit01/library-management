@@ -33,7 +33,7 @@ export default function PurchaserIssues() {
     load();
   }, [load]);
 
-  // /issues/my status filter nahi leta, isliye tab frontend par filter hota hai
+
   const visible = issues.filter((i) => {
     if (tab === "issued") return i.status === "issued";
     if (tab === "overdue") return i.status === "issued" && i.isOverdue;

@@ -7,13 +7,13 @@ export const errorHandler = (err, req, res, next) => {
   let message = err.message || "Server error";
   let errors;
 
-  // Invalid ObjectId (e.g. /books/abc)
+
   if (err.name === "CastError") {
     status = 400;
     message = `Invalid ${err.path}`;
   }
 
-  // Mongoose schema validation
+
   if (err.name === "ValidationError") {
     status = 400;
     message = "Validation failed";
@@ -22,14 +22,14 @@ export const errorHandler = (err, req, res, next) => {
     );
   }
 
-  // Duplicate key (e.g. ISBN, email)
+
   if (err.code === 11000) {
     status = 409;
     const field = Object.keys(err.keyValue || {})[0];
     message = `${field} already exists`;
   }
 
-  // JWT
+
   if (err.name === "JsonWebTokenError") {
     status = 401;
     message = "Invalid token";

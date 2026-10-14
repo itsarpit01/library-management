@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import connectDB from "./config/db.js";
 import routes from "./routes/index.js";
-import errorHandler from "./middleware/errorHandler.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
@@ -17,9 +17,6 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 connectDB();
 
 const app = express();
-
-// Render/Vercel jaise proxy ke peeche sahi client IP milne ke liye
-app.set("trust proxy", 1);
 
 app.use(helmet());
 

@@ -1,18 +1,12 @@
 import express from "express";
-import {
-  getBooks,
-  getBookById,
-  createBook,
-  updateBook,
-  deleteBook,
-} from "../controllers/bookController.js";
+import {getBooks,getBookById,createBook,updateBook,deleteBook,} from "../controllers/bookController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
 import { createBookSchema, updateBookSchema, idParamSchema } from "../validators/bookValidator.js";
 
 const router = express.Router();
 
-router.use(protect); // is group ke saare routes ke liye login zaroori
+router.use(protect); 
 
 router
   .route("/")

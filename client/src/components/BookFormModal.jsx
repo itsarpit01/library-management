@@ -36,7 +36,7 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     e.preventDefault();
     setFormError("");
 
-    // 1. Frontend Zod validation
+  
     const parsed = bookFormSchema.safeParse(form);
     if (!parsed.success) {
       const fe = {};
@@ -51,7 +51,6 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     const payload = { ...parsed.data };
     if (!payload.category) delete payload.category;
 
-    // 2. API call
     setSaving(true);
     try {
       if (isEdit) {

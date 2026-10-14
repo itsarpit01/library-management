@@ -2,14 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import {
-  BookIcon,
-  DashboardIcon,
-  IssueIcon,
-  RequestIcon,
-  LogoutIcon,
-  MenuIcon,
-} from "./Icons";
+import { BookIcon, DashboardIcon, IssueIcon, RequestIcon,LogoutIcon, MenuIcon,} from "./Icons";
 
 const NAV = {
   librarian: [

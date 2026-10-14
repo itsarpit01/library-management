@@ -4,14 +4,13 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://127.0.0.1:5000/api",
 });
 
-// Har request mein token auto-attach
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// 401 par logout (login request ko chhod ke, wahan galat password bhi aa sakta hai)
 api.interceptors.response.use(
   (res) => res,
   (error) => {

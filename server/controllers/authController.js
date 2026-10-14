@@ -17,11 +17,10 @@ const publicUser = (user) => ({
   role: user.role,
 });
 
-// POST /api/auth/register
+
 export const register = async (req, res) => {
   try {
-    // Zod (validate middleware) pehle hi name, email, password check kar chuka hai.
-    // role yahan se nahi liya jata: public register se hamesha purchaser.
+
     const { name, email, password } = req.body;
 
     const exists = await User.findOne({ email });
@@ -44,7 +43,6 @@ export const register = async (req, res) => {
   }
 };
 
-// POST /api/auth/login
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -52,7 +50,6 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email });
     const isMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-    // Same message dono cases mein, taaki pata na chale ki email exist karta hai ya nahi
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }

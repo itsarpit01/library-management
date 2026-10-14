@@ -4,7 +4,6 @@ import { bookQuerySchema } from "../validators/bookQueryValidator.js";
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// GET /api/books?search=&category=&author=&available=&sort=&page=&limit=
 export const getBooks = async (req, res) => {
   const parsed = bookQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -21,7 +20,7 @@ export const getBooks = async (req, res) => {
     const regex = new RegExp(escapeRegex(search), "i");
     filter.$or = [{ title: regex }, { author: regex }];
 
-    // ISBN DB mein hyphen ke bina hai, isliye search se hyphen/space hata do
+   
     const isbnTerm = search.replace(/[-\s]/g, "");
     if (isbnTerm) {
       filter.$or.push({ isbn: new RegExp(escapeRegex(isbnTerm), "i") });
@@ -45,14 +44,13 @@ export const getBooks = async (req, res) => {
   });
 };
 
-// GET /api/books/:id
 export const getBookById = async (req, res) => {
   const book = await Book.findById(req.params.id);
   if (!book) return res.status(404).json({ message: "Book not found" });
   res.json(book);
 };
 
-// POST /api/books (librarian)
+
 export const createBook = async (req, res) => {
   const { isbn, totalCopies } = req.body;
 
@@ -65,7 +63,6 @@ export const createBook = async (req, res) => {
   res.status(201).json(book);
 };
 
-// PUT /api/books/:id (librarian)
 export const updateBook = async (req, res) => {
   const book = await Book.findById(req.params.id);
   if (!book) return res.status(404).json({ message: "Book not found" });
@@ -94,7 +91,6 @@ export const updateBook = async (req, res) => {
   res.json(updated);
 };
 
-// DELETE /api/books/:id (librarian)
 export const deleteBook = async (req, res) => {
   const activeIssues = await Issue.countDocuments({ book: req.params.id, status: "issued" });
   if (activeIssues > 0) {
