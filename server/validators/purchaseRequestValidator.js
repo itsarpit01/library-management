@@ -21,3 +21,14 @@ export const reviewRequestSchema = z.object({
   }),
   reviewNote: z.string().trim().max(300, "Max 300 characters").optional(),
 });
+export const updateRequestSchema = z.object({
+  quantity: z
+    .number({ error: "Quantity must be a number" })
+    .int("Quantity must be a whole number")
+    .min(1, "At least 1"),
+  reason: z
+    .string({ error: "Reason is required" })
+    .trim()
+    .min(5, "Reason must be at least 5 characters")
+    .max(500, "Max 500 characters"),
+});

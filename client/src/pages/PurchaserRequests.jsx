@@ -5,7 +5,7 @@ import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import RequestFormModal from "../components/RequestFormModal";
 import Modal from "../components/Modal";
-import { PlusIcon, TrashIcon } from "../components/Icons";
+import { PlusIcon, TrashIcon, EditIcon } from "../components/Icons";
 
 const TABS = [
   { key: "", label: "All" },
@@ -14,6 +14,7 @@ const TABS = [
   { key: "rejected", label: "Rejected" },
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const statusBadge = (status) => {
   const cls = { pending: "badge-warning", approved: "badge-success", rejected: "badge-danger" }[status];
   return <span className={`badge ${cls}`}>{status}</span>;
@@ -25,6 +26,7 @@ export default function PurchaserRequests() {
   const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [toEdit, setToEdit] = useState(null);
   const [toCancel, setToCancel] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
@@ -64,7 +66,7 @@ export default function PurchaserRequests() {
       <div className="page-head">
         <div>
           <h2>My Requests</h2>
-          <p>Ask the librarian to buy a new book.</p>
+          <p>Ask the librarian to buy more copies. You can edit a request until it is reviewed.</p>
         </div>
         <button className="btn" onClick={() => setShowForm(true)}>
           <PlusIcon size={18} /> New request
@@ -95,7 +97,7 @@ export default function PurchaserRequests() {
               <tr>
                 <th>Book</th>
                 <th>Qty</th>
-                <th>Est. price</th>
+                <th>Reason</th>
                 <th>Requested</th>
                 <th>Status</th>
                 <th>Librarian note</th>
@@ -110,7 +112,7 @@ export default function PurchaserRequests() {
                     <span className="cell-sub">{r.author}</span>
                   </td>
                   <td>{r.quantity}</td>
-                  <td>{r.estimatedPrice != null ? `₹${r.estimatedPrice}` : "-"}</td>
+                  <td>{r.reason || "-"}</td>
                   <td>{formatDate(r.createdAt)}</td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
@@ -119,9 +121,14 @@ export default function PurchaserRequests() {
                   </td>
                   <td>
                     {r.status === "pending" && (
-                      <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
-                        <TrashIcon size={16} /> Cancel
-                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
+                          <EditIcon size={16} /> Edit
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
+                          <TrashIcon size={16} /> Cancel
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -136,6 +143,17 @@ export default function PurchaserRequests() {
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false);
+            load();
+          }}
+        />
+      )}
+
+      {toEdit && (
+        <RequestFormModal
+          request={toEdit}
+          onClose={() => setToEdit(null)}
+          onSaved={() => {
+            setToEdit(null);
             load();
           }}
         />

@@ -18,3 +18,16 @@ export const makeRequestFormSchema = (maxQty) =>
 export const reviewSchema = z.object({
   reviewNote: z.string().trim().max(300, "Max 300 characters"),
 });
+export const makeEditRequestSchema = (maxQty) =>
+  z.object({
+    quantity: z.coerce
+      .number({ error: "Quantity must be a number" })
+      .int("Quantity must be a whole number")
+      .min(1, "At least 1")
+      .max(maxQty || 9999, `Library has only ${maxQty} copies`),
+    reason: z
+      .string()
+      .trim()
+      .min(5, "Reason must be at least 5 characters")
+      .max(500, "Max 500 characters"),
+  });
