@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
-import { makeRequestFormSchema, makeEditRequestSchema } from "../schemas/requestSchema";
+import { makeRequestFormSchema } from "../schemas/requestSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 
 export default function RequestFormModal({ initial = {}, request, onClose, onSaved }) {
@@ -23,14 +23,20 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   useEffect(() => {
     api
       .get("/books", { params: { limit: 50, sort: "title" } })
-      .then((res) => setBooks(res.data.data))
+      .then((res) => {
+        const list = res.data.data;
+        setBooks(list);
+        // Purani request mein book id nahi hoti, ISBN se match karo
+        if (request && !request.book && request.isbn) {
+          const match = list.find((b) => b.isbn === request.isbn);
+          if (match) setForm((f) => ({ ...f, bookId: match._id }));
+        }
+      })
       .catch((err) => setFormError(getErrorMessage(err)))
       .finally(() => setLoadingBooks(false));
-  }, []);
+  }, [request]);
 
-  const selected = isEdit
-    ? books.find((b) => b._id === request.book || (request.isbn && b.isbn === request.isbn))
-    : books.find((b) => b._id === form.bookId);
+  const selected = books.find((b) => b._id === form.bookId);
 
   const change = (e) => {
     const { name, value } = e.target;
@@ -39,6 +45,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   };
 
   const pickBook = (e) => {
+    // Book badalne par quantity wapas 1
     setForm((f) => ({ ...f, bookId: e.target.value, quantity: 1 }));
     setErrors((er) => ({ ...er, bookId: undefined, quantity: undefined }));
   };
@@ -47,10 +54,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
     e.preventDefault();
     setFormError("");
 
-    const schema = isEdit
-      ? makeEditRequestSchema(selected?.totalCopies)
-      : makeRequestFormSchema(selected?.totalCopies);
-    const parsed = schema.safeParse(form);
+    const parsed = makeRequestFormSchema(selected?.totalCopies).safeParse(form);
     if (!parsed.success) {
       const fe = {};
       parsed.error.issues.forEach((i) => {
@@ -86,45 +90,31 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
 
         <div className="field">
           <label htmlFor="bookId">Title</label>
-          {isEdit ? (
-            <input id="bookId" value={request.title} readOnly />
-          ) : (
-            <select
-              id="bookId"
-              name="bookId"
-              value={form.bookId}
-              onChange={pickBook}
-              disabled={loadingBooks}
-            >
-              <option value="">{loadingBooks ? "Loading books..." : "Select a book"}</option>
-              {books.map((b) => (
-                <option key={b._id} value={b._id}>
-                  {b.title}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            id="bookId"
+            name="bookId"
+            value={form.bookId}
+            onChange={pickBook}
+            disabled={loadingBooks}
+          >
+            <option value="">{loadingBooks ? "Loading books..." : "Select a book"}</option>
+            {books.map((b) => (
+              <option key={b._id} value={b._id}>
+                {b.title}
+              </option>
+            ))}
+          </select>
           {errors.bookId && <span className="error-text">{errors.bookId}</span>}
         </div>
 
         <div className="field">
           <label htmlFor="author">Author</label>
-          <input
-            id="author"
-            value={isEdit ? request.author : selected?.author || ""}
-            readOnly
-            placeholder="Auto-filled"
-          />
+          <input id="author" value={selected?.author || ""} readOnly placeholder="Auto-filled" />
         </div>
 
         <div className="field">
           <label htmlFor="isbn">ISBN</label>
-          <input
-            id="isbn"
-            value={isEdit ? request.isbn || "" : selected?.isbn || ""}
-            readOnly
-            placeholder="Auto-filled"
-          />
+          <input id="isbn" value={selected?.isbn || ""} readOnly placeholder="Auto-filled" />
         </div>
 
         <div className="field">
@@ -134,10 +124,10 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
             name="quantity"
             type="number"
             min={1}
-            max={selected?.totalCopies || undefined}
+            max={selected?.totalCopies || 1}
             value={form.quantity}
             onChange={change}
-            disabled={!isEdit && !selected}
+            disabled={!selected}
           />
           {selected && !errors.quantity && (
             <span className="hint">Library has {selected.totalCopies} copies (max you can request)</span>

@@ -10,6 +10,17 @@ const checkId = (id, res) => {
   return true;
 };
 
+const quantityCapError = (res, totalCopies) =>
+  res.status(400).json({
+    message: "Validation failed",
+    errors: [
+      {
+        field: "quantity",
+        message: `Library has only ${totalCopies} copies, you cannot request more`,
+      },
+    ],
+  });
+
 // POST /api/purchase-requests (purchaser)
 export const createRequest = async (req, res) => {
   const { bookId, quantity, reason } = req.body;
@@ -21,15 +32,7 @@ export const createRequest = async (req, res) => {
 
   // Cap: library ki total copies se zyada request nahi
   if (quantity > book.totalCopies) {
-    return res.status(400).json({
-      message: "Validation failed",
-      errors: [
-        {
-          field: "quantity",
-          message: `Library has only ${book.totalCopies} copies, you cannot request more`,
-        },
-      ],
-    });
+    return quantityCapError(res, book.totalCopies);
   }
 
   const request = await PurchaseRequest.create({
@@ -53,6 +56,46 @@ export const getMyRequests = async (req, res) => {
     .sort({ createdAt: -1 })
     .populate("reviewedBy", "name");
   res.json(requests);
+};
+
+// PATCH /api/purchase-requests/:id (purchaser, sirf apna pending)
+export const updateRequest = async (req, res) => {
+  if (!checkId(req.params.id, res)) return;
+  const { bookId, quantity, reason } = req.body;
+
+  const existing = await PurchaseRequest.findOne({
+    _id: req.params.id,
+    requestedBy: req.user.id,
+  });
+  if (!existing) return res.status(404).json({ message: "Request not found" });
+  if (existing.status !== "pending") {
+    return res.status(409).json({ message: "Only pending requests can be edited" });
+  }
+
+  const book = await Book.findById(bookId);
+  if (!book) return res.status(404).json({ message: "Book not found" });
+
+  if (quantity > book.totalCopies) {
+    return quantityCapError(res, book.totalCopies);
+  }
+
+  // Atomic: review ke beech mein edit na ho jaye
+  const updated = await PurchaseRequest.findOneAndUpdate(
+    { _id: existing._id, requestedBy: req.user.id, status: "pending" },
+    {
+      book: book._id,
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      quantity,
+      reason,
+    },
+    { new: true }
+  );
+  if (!updated) {
+    return res.status(409).json({ message: "Request was already reviewed" });
+  }
+  res.json(updated);
 };
 
 // DELETE /api/purchase-requests/:id (purchaser, sirf apna pending)
@@ -100,48 +143,6 @@ export const reviewRequest = async (req, res) => {
     return exists
       ? res.status(409).json({ message: "Request already reviewed" })
       : res.status(404).json({ message: "Request not found" });
-  }
-  res.json(updated);
-};
-// PATCH /api/purchase-requests/:id (purchaser, sirf apna pending)
-export const updateRequest = async (req, res) => {
-  if (!checkId(req.params.id, res)) return;
-  const { quantity, reason } = req.body;
-
-  const existing = await PurchaseRequest.findOne({
-    _id: req.params.id,
-    requestedBy: req.user.id,
-  });
-  if (!existing) return res.status(404).json({ message: "Request not found" });
-  if (existing.status !== "pending") {
-    return res.status(409).json({ message: "Only pending requests can be edited" });
-  }
-
-  // Cap check: purani requests mein book ref na ho to ISBN se dhoondo
-  const book = existing.book
-    ? await Book.findById(existing.book)
-    : await Book.findOne({ isbn: existing.isbn });
-
-  if (book && quantity > book.totalCopies) {
-    return res.status(400).json({
-      message: "Validation failed",
-      errors: [
-        {
-          field: "quantity",
-          message: `Library has only ${book.totalCopies} copies, you cannot request more`,
-        },
-      ],
-    });
-  }
-
-  // Atomic: review ke beech mein edit na ho jaye
-  const updated = await PurchaseRequest.findOneAndUpdate(
-    { _id: existing._id, requestedBy: req.user.id, status: "pending" },
-    { quantity, reason },
-    { new: true }
-  );
-  if (!updated) {
-    return res.status(409).json({ message: "Request was already reviewed" });
   }
   res.json(updated);
 };
