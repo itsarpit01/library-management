@@ -22,7 +22,7 @@ export default function PurchaserBooks() {
   const [sort, setSort] = useState("title");
   const [page, setPage] = useState(1);
 
-  const [requestFor, setRequestFor] = useState(null); // book object ya null
+  const [requestFor, setRequestFor] = useState(null); // { bookId } ya {} ya null
 
   const debouncedSearch = useDebounce(search);
   const debouncedCategory = useDebounce(category);
@@ -58,10 +58,10 @@ export default function PurchaserBooks() {
       <div className="page-head">
         <div>
           <h2>Browse Books</h2>
-          <p>{pagination.total} book(s) in the library. Cannot find one? Request it.</p>
+          <p>{pagination.total} book(s) in the library.</p>
         </div>
         <button className="btn" onClick={() => setRequestFor({})}>
-          <RequestIcon size={18} /> Request a new book
+          <RequestIcon size={18} /> Request a book
         </button>
       </div>
 
@@ -98,7 +98,7 @@ export default function PurchaserBooks() {
       {loading ? (
         <p className="empty">Loading books...</p>
       ) : books.length === 0 ? (
-        <p className="empty">No books found. Try a different search or request this book.</p>
+        <p className="empty">No books found. Try a different search.</p>
       ) : (
         <div className="book-grid">
           {books.map((b) => (
@@ -108,7 +108,7 @@ export default function PurchaserBooks() {
               actions={
                 <button
                   className="btn btn-soft btn-sm"
-                  onClick={() => setRequestFor({ title: b.title, author: b.author, isbn: b.isbn })}
+                  onClick={() => setRequestFor({ bookId: b._id })}
                 >
                   <RequestIcon size={16} /> Request this book
                 </button>

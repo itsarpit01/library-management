@@ -112,7 +112,6 @@ export default function LibrarianRequests() {
                 <th>Book</th>
                 <th>Requested by</th>
                 <th>Qty</th>
-                <th>Est. price</th>
                 <th>Date</th>
                 <th>Status</th>
                 <th></th>
@@ -130,7 +129,6 @@ export default function LibrarianRequests() {
                     <span className="cell-sub">{r.requestedBy?.email}</span>
                   </td>
                   <td>{r.quantity}</td>
-                  <td>{r.estimatedPrice != null ? `₹${r.estimatedPrice}` : "-"}</td>
                   <td>{formatDate(r.createdAt)}</td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
@@ -154,9 +152,8 @@ export default function LibrarianRequests() {
             <p><span>Author</span>{selected.author}</p>
             {selected.isbn && <p><span>ISBN</span>{selected.isbn}</p>}
             <p><span>Quantity</span>{selected.quantity}</p>
-            {selected.estimatedPrice != null && <p><span>Est. price</span>₹{selected.estimatedPrice}</p>}
             <p><span>Requested by</span>{selected.requestedBy?.name}</p>
-            {selected.reason && <p><span>Reason</span>{selected.reason}</p>}
+            <p><span>Reason</span>{selected.reason || "-"}</p>
             <p><span>Status</span>{statusBadge(selected.status)}</p>
             {selected.status !== "pending" && (
               <p><span>Note</span>{selected.reviewNote || "-"}</p>
