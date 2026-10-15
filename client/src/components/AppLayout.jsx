@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
+import ThemeToggle from "./ThemeToggle";
 import { BookIcon, DashboardIcon, IssueIcon, RequestIcon, LogoutIcon, MenuIcon } from "./Icons";
 
 const NAV = {
@@ -81,6 +82,7 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar-right">
+            <ThemeToggle />
             <Link to={`/${user.role}/profile`} className="profile-link" title="My profile">
               <div className="user-meta">
                 <strong>{user.name}</strong>
