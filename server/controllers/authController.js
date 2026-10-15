@@ -20,10 +20,17 @@ const publicUser = (user) => ({
   role: user.role,
 });
 
+// httpOnly cookie: JS isse padh nahi sakta (XSS se token chori nahi hoga)
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 din, JWT jitna
+};
+
 // POST /api/auth/register
 export const register = async (req, res) => {
   try {
-    // Zod (validate middleware) pehle hi name, email, password check kar chuka hai.
     // role yahan se nahi liya jata: public register se hamesha purchaser.
     const { name, email, password } = req.body;
 
@@ -41,7 +48,8 @@ export const register = async (req, res) => {
       role: "purchaser",
     });
 
-    res.status(201).json({ token: generateToken(user), user: publicUser(user) });
+    // Register ke baad user ko login page par bhejte hain, isliye cookie set nahi
+    res.status(201).json({ user: publicUser(user) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -60,10 +68,29 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    res.json({ token: generateToken(user), user: publicUser(user) });
+    res.cookie("token", generateToken(user), cookieOptions);
+    res.json({ user: publicUser(user) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+// GET /api/auth/me  (protect ke baad): refresh par session wapas lene ke liye
+export const me = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("name email role");
+    if (!user) return res.status(401).json({ message: "User not found" });
+    res.json({ user: publicUser(user) });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// POST /api/auth/logout
+export const logout = (req, res) => {
+  const { maxAge, ...clearOptions } = cookieOptions; // clearCookie ko maxAge nahi chahiye
+  res.clearCookie("token", clearOptions);
+  res.json({ message: "Logged out" });
 };
 
 /* ---------------- Forgot password (OTP) ---------------- */

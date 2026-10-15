@@ -16,7 +16,8 @@ import PurchaserIssues from "./pages/PurchaserIssues";
 import PurchaserRequests from "./pages/PurchaserRequests";
 
 function RootRedirect() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
+  if (loading) return null; // session check hone tak ruko
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return (
     <Navigate

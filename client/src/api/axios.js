@@ -1,21 +1,17 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://127.0.0.1:5000/api",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  withCredentials: true, // browser cookie bhejega aur lega
 });
 
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
+// 401 par logout (login aur session-check ko chhod ke)
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    const isLogin = error.config?.url?.includes("/auth/login");
-    if (error.response?.status === 401 && !isLogin) {
+    const url = error.config?.url || "";
+    const skip = url.includes("/auth/login") || url.includes("/auth/me");
+    if (error.response?.status === 401 && !skip) {
       window.dispatchEvent(new Event("auth:logout"));
     }
     return Promise.reject(error);

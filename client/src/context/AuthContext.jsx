@@ -1,69 +1,53 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api from "../api/axios";
 
 const AuthContext = createContext(null);
-
 const VALID_ROLES = ["librarian", "purchaser"];
 
-const readUser = () => {
-  try {
-    return JSON.parse(localStorage.getItem("user"));
-  } catch {
-    return null;
-  }
-};
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readUser);
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // App khulte hi: cookie valid hai to user mil jata hai
+  useEffect(() => {
+    api
+      .get("/auth/me")
+      .then((res) => setUser(res.data.user))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  }, []);
 
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setToken(data.token);
     setUser(data.user);
     return data.user;
   };
 
-  const register = async (name, email, password) => {
-    const { data } = await api.post("/auth/register", { name, email, password });
+  const register = async (name, email, password, role = "purchaser") => {
+    const { data } = await api.post("/auth/register", { name, email, password, role });
     return data;
   };
 
-  const updateUser = (changes) => {
-    const next = { ...user, ...changes };
-    localStorage.setItem("user", JSON.stringify(next));
-    setUser(next);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setToken(null);
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // server na mile tab bhi local state saaf
+    }
     setUser(null);
-  };
-
-  // axios interceptor 401 par ye event bhejta hai
-  useEffect(() => {
-    window.addEventListener("auth:logout", logout);
-    return () => window.removeEventListener("auth:logout", logout);
   }, []);
 
-  // Token ho aur role valid ho, tabhi logged in maano (redirect loop se bachne ke liye)
-  const validRole = VALID_ROLES.includes(user?.role);
+  useEffect(() => {
+    const onForcedLogout = () => setUser(null);
+    window.addEventListener("auth:logout", onForcedLogout);
+    return () => window.removeEventListener("auth:logout", onForcedLogout);
+  }, []);
+
+  const isAuthenticated = !!user && VALID_ROLES.includes(user.role);
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: !!token && validRole,
-        login,
-        register,
-        updateUser,
-        logout,
-      }}
+      value={{ user, setUser, loading, isAuthenticated, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>

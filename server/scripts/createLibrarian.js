@@ -49,7 +49,7 @@ try {
     if (existing.role === "librarian") {
       console.log(`${normalized} is already a librarian`);
     } else {
-      // Password nahi badalta, sirf role promote hota hai
+      
       existing.role = "librarian";
       await existing.save();
       console.log(`Existing user ${normalized} promoted to librarian (password unchanged)`);

@@ -30,10 +30,10 @@ export default function AppLayout() {
 
   const links = NAV[user.role] || [];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setConfirmLogout(false);
     setOpen(false);
-    logout();
+    await logout(); // server cookie clear hone ke baad redirect
     toast.info("Logged out");
     navigate("/login", { replace: true });
   };
