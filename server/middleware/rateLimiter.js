@@ -39,3 +39,20 @@ export const passwordLimiter = rateLimit({
   legacyHeaders: false,
   handler: handler("Too many attempts, please try again in 15 minutes"),
 });
+// Forgot password: ek IP se 15 minute mein 5 OTP requests
+export const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.FORGOT_LIMIT_MAX) || 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many OTP requests, please try again later"),
+});
+
+// Reset: 15 minute mein 10 attempts per IP
+export const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.RESET_LIMIT_MAX) || 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many attempts, please try again later"),
+});

@@ -29,3 +29,14 @@ export const loginSchema = z.object({
   email: emailSchema,
   password: z.string({ error: "Password is required" }).min(1, "Password is required"),
 });
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+export const resetPasswordSchema = z.object({
+  email: emailSchema,
+  otp: z
+    .string({ error: "OTP is required" })
+    .regex(/^\d{6}$/, "OTP must be 6 digits"),
+  newPassword: passwordSchema,
+});

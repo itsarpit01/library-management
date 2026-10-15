@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
 import Profile from "./pages/Profile";
 import LibrarianHome from "./pages/LibrarianHome";
 import LibrarianBooks from "./pages/LibrarianBooks";
@@ -31,6 +32,7 @@ export default function App() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
       {/* Librarian group */}
       <Route element={<ProtectedRoute roles={["librarian"]} />}>
