@@ -9,6 +9,11 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const toast = useToast();
   const isEdit = Boolean(request);
 
+  // Card se "Request this book" dabane par bookId pehle se pata hota hai:
+  // tab title fixed dikhta hai, dropdown nahi.
+  const lockedId = !isEdit ? initial.bookId || "" : "";
+  const isLocked = Boolean(lockedId);
+
   const [books, setBooks] = useState([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [form, setForm] = useState({
@@ -21,20 +26,37 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api
-      .get("/books", { params: { limit: 50, sort: "title" } })
-      .then((res) => {
-        const list = res.data.data;
-        setBooks(list);
-        // Purani request mein book id nahi hoti, ISBN se match karo
-        if (request && !request.book && request.isbn) {
-          const match = list.find((b) => b.isbn === request.isbn);
-          if (match) setForm((f) => ({ ...f, bookId: match._id }));
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        if (isLocked) {
+          // Sirf ek book chahiye, poori list nahi
+          const res = await api.get(`/books/${lockedId}`);
+          if (!cancelled) setBooks([res.data]);
+        } else {
+          const res = await api.get("/books", { params: { limit: 50, sort: "title" } });
+          if (cancelled) return;
+          const list = res.data.data;
+          setBooks(list);
+          // Purani request mein book id nahi hoti, ISBN se match karo
+          if (request && !request.book && request.isbn) {
+            const match = list.find((b) => b.isbn === request.isbn);
+            if (match) setForm((f) => ({ ...f, bookId: match._id }));
+          }
         }
-      })
-      .catch((err) => setFormError(getErrorMessage(err)))
-      .finally(() => setLoadingBooks(false));
-  }, [request]);
+      } catch (err) {
+        if (!cancelled) setFormError(getErrorMessage(err));
+      } finally {
+        if (!cancelled) setLoadingBooks(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [request, isLocked, lockedId]);
 
   const selected = books.find((b) => b._id === form.bookId);
 
@@ -83,27 +105,42 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
     }
   };
 
+  const modalTitle = isEdit
+    ? "Edit request"
+    : isLocked
+    ? "Request this book"
+    : "Request a book";
+
   return (
-    <Modal title={isEdit ? "Edit request" : "Request a book"} onClose={onClose}>
+    <Modal title={modalTitle} onClose={onClose}>
       <form onSubmit={submit} noValidate>
         {formError && <div className="alert-error">{formError}</div>}
 
         <div className="field">
           <label htmlFor="bookId">Title</label>
-          <select
-            id="bookId"
-            name="bookId"
-            value={form.bookId}
-            onChange={pickBook}
-            disabled={loadingBooks}
-          >
-            <option value="">{loadingBooks ? "Loading books..." : "Select a book"}</option>
-            {books.map((b) => (
-              <option key={b._id} value={b._id}>
-                {b.title}
-              </option>
-            ))}
-          </select>
+          {isLocked ? (
+            // Card se aaye: dropdown nahi, fixed title
+            <input
+              id="bookId"
+              value={selected?.title || (loadingBooks ? "Loading..." : "")}
+              readOnly
+            />
+          ) : (
+            <select
+              id="bookId"
+              name="bookId"
+              value={form.bookId}
+              onChange={pickBook}
+              disabled={loadingBooks}
+            >
+              <option value="">{loadingBooks ? "Loading books..." : "Select a book"}</option>
+              {books.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.title}
+                </option>
+              ))}
+            </select>
+          )}
           {errors.bookId && <span className="error-text">{errors.bookId}</span>}
         </div>
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
@@ -15,6 +15,7 @@ export default function PurchaserBooks() {
   const [books, setBooks] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
+  const [firstLoad, setFirstLoad] = useState(true);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -22,16 +23,17 @@ export default function PurchaserBooks() {
   const [sort, setSort] = useState("title");
   const [page, setPage] = useState(1);
 
-  const [requestFor, setRequestFor] = useState(null); // { bookId } ya {} ya null
+  // null = band, {} = dropdown wala form, { bookId } = us book ka fixed form
+  const [requestFor, setRequestFor] = useState(null);
 
   const debouncedSearch = useDebounce(search);
   const debouncedCategory = useDebounce(category);
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, debouncedCategory, available, sort]);
+  // Sirf sabse latest request ka response use hoga
+  const requestId = useRef(0);
 
   const loadBooks = useCallback(async () => {
+    const myId = ++requestId.current;
     setLoading(true);
     try {
       const params = { sort, page, limit: LIMIT };
@@ -40,12 +42,17 @@ export default function PurchaserBooks() {
       if (available) params.available = available;
 
       const res = await api.get("/books", { params });
+      if (myId !== requestId.current) return;
       setBooks(res.data.data);
       setPagination(res.data.pagination);
     } catch (err) {
+      if (myId !== requestId.current) return;
       toast.error(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (myId === requestId.current) {
+        setLoading(false);
+        setFirstLoad(false);
+      }
     }
   }, [debouncedSearch, debouncedCategory, available, sort, page, toast]);
 
@@ -71,21 +78,41 @@ export default function PurchaserBooks() {
           <input
             placeholder="Search title, author or ISBN"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <input
           className="toolbar-input"
           placeholder="Category"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(1);
+          }}
         />
-        <select className="toolbar-input" value={available} onChange={(e) => setAvailable(e.target.value)}>
+        <select
+          className="toolbar-input"
+          value={available}
+          onChange={(e) => {
+            setAvailable(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="">All books</option>
           <option value="true">Available</option>
           <option value="false">Not available</option>
         </select>
-        <select className="toolbar-input" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select
+          className="toolbar-input"
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="title">Title A-Z</option>
           <option value="-title">Title Z-A</option>
           <option value="author">Author A-Z</option>
@@ -95,12 +122,15 @@ export default function PurchaserBooks() {
         </select>
       </div>
 
-      {loading ? (
+      {firstLoad && loading ? (
         <p className="empty">Loading books...</p>
       ) : books.length === 0 ? (
         <p className="empty">No books found. Try a different search.</p>
       ) : (
-        <div className="book-grid">
+        <div
+          className="book-grid"
+          style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}
+        >
           {books.map((b) => (
             <BookCard
               key={b._id}
@@ -138,6 +168,7 @@ export default function PurchaserBooks() {
 
       {requestFor && (
         <RequestFormModal
+          key={requestFor.bookId || "new"} // har book ke liye fresh state
           initial={requestFor}
           onClose={() => setRequestFor(null)}
           onSaved={() => {
