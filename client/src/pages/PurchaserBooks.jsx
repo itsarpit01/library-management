@@ -5,7 +5,6 @@ import { getErrorMessage } from "../utils/errors";
 import useDebounce from "../hooks/useDebounce";
 import BookCard from "../components/BookCard";
 import RequestFormModal from "../components/RequestFormModal";
-import BorrowRequestModal from "../components/BorrowRequestModal";
 import { SearchIcon, RequestIcon } from "../components/Icons";
 
 const LIMIT = 8;
@@ -26,13 +25,10 @@ export default function PurchaserBooks() {
 
   // null = band, {} = dropdown wala form, { bookId } = us book ka fixed form
   const [requestFor, setRequestFor] = useState(null);
-  // null = band, book object = borrow request form
-  const [borrowBook, setBorrowBook] = useState(null);
 
   const debouncedSearch = useDebounce(search);
   const debouncedCategory = useDebounce(category);
 
-  // Sirf sabse latest request ka response use hoga
   const requestId = useRef(0);
 
   const loadBooks = useCallback(async () => {
@@ -139,21 +135,12 @@ export default function PurchaserBooks() {
               key={b._id}
               book={b}
               actions={
-                <>
-                  <button
-                    className="btn btn-sm"
-                    disabled={b.availableCopies < 1}
-                    onClick={() => setBorrowBook(b)}
-                  >
-                    {b.availableCopies < 1 ? "Not available" : "Borrow"}
-                  </button>
-                  <button
-                    className="btn btn-soft btn-sm"
-                    onClick={() => setRequestFor({ bookId: b._id })}
-                  >
-                    <RequestIcon size={16} /> Request this book
-                  </button>
-                </>
+                <button
+                  className="btn btn-soft btn-sm"
+                  onClick={() => setRequestFor({ bookId: b._id })}
+                >
+                  <RequestIcon size={16} /> Request this book
+                </button>
               }
             />
           ))}
@@ -180,24 +167,12 @@ export default function PurchaserBooks() {
 
       {requestFor && (
         <RequestFormModal
-          key={requestFor.bookId || "new"} // har book ke liye fresh state
+          key={requestFor.bookId || "new"}
           initial={requestFor}
           onClose={() => setRequestFor(null)}
           onSaved={() => {
             setRequestFor(null);
             toast.info("Track it under My Requests");
-          }}
-        />
-      )}
-
-      {borrowBook && (
-        <BorrowRequestModal
-          key={borrowBook._id}
-          book={borrowBook}
-          onClose={() => setBorrowBook(null)}
-          onSaved={() => {
-            setBorrowBook(null);
-            toast.info("Track it under Borrow Requests");
           }}
         />
       )}

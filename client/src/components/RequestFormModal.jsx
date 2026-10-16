@@ -4,6 +4,7 @@ import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
 import { makeRequestFormSchema } from "../schemas/requestSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
+import { dateInput, toDateInput, MAX_ISSUE_DAYS } from "../utils/format";
 
 export default function RequestFormModal({ initial = {}, request, onClose, onSaved }) {
   const toast = useToast();
@@ -19,6 +20,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const [form, setForm] = useState({
     bookId: request?.book || initial.bookId || "",
     quantity: request?.quantity ?? 1,
+    neededUntil: request?.neededUntil ? toDateInput(request.neededUntil) : dateInput(14),
     reason: request?.reason || "",
   });
   const [errors, setErrors] = useState({});
@@ -31,7 +33,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
     const load = async () => {
       try {
         if (isLocked) {
-          // Sirf ek book chahiye, poori list nahi
           const res = await api.get(`/books/${lockedId}`);
           if (!cancelled) setBooks([res.data]);
         } else {
@@ -105,11 +106,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
     }
   };
 
-  const modalTitle = isEdit
-    ? "Edit request"
-    : isLocked
-    ? "Request this book"
-    : "Request a book";
+  const modalTitle = isEdit ? "Edit request" : isLocked ? "Request this book" : "Request a book";
 
   return (
     <Modal title={modalTitle} onClose={onClose}>
@@ -119,7 +116,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         <div className="field">
           <label htmlFor="bookId">Title</label>
           {isLocked ? (
-            // Card se aaye: dropdown nahi, fixed title
             <input
               id="bookId"
               value={selected?.title || (loadingBooks ? "Loading..." : "")}
@@ -170,6 +166,24 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
             <span className="hint">Library has {selected.totalCopies} copies (max you can request)</span>
           )}
           {errors.quantity && <span className="error-text">{errors.quantity}</span>}
+        </div>
+
+        <div className="field">
+          <label htmlFor="neededUntil">Needed until</label>
+          <input
+            id="neededUntil"
+            name="neededUntil"
+            type="date"
+            min={dateInput(1)}
+            max={dateInput(MAX_ISSUE_DAYS)}
+            value={form.neededUntil}
+            onChange={change}
+          />
+          {errors.neededUntil ? (
+            <span className="error-text">{errors.neededUntil}</span>
+          ) : (
+            <span className="hint">Max {MAX_ISSUE_DAYS} days. After that, ask for a reissue.</span>
+          )}
         </div>
 
         <div className="field">

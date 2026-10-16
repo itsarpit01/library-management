@@ -9,7 +9,7 @@ import Modal from "../components/Modal";
 import { CheckIcon, XIcon } from "../components/Icons";
 
 const TABS = [
-   { key: "", label: "All" },
+  { key: "", label: "All" },
   { key: "pending", label: "Pending" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
@@ -82,7 +82,7 @@ export default function LibrarianRequests() {
     <>
       <div className="page-head">
         <div>
-          <h2>Purchase Requests</h2>
+          <h2>Requests</h2>
           <p>Review book requests from members.</p>
         </div>
       </div>
@@ -112,6 +112,7 @@ export default function LibrarianRequests() {
                 <th>Book</th>
                 <th>Requested by</th>
                 <th>Qty</th>
+                <th>Needed until</th>
                 <th>Date</th>
                 <th>Status</th>
                 <th></th>
@@ -129,6 +130,7 @@ export default function LibrarianRequests() {
                     <span className="cell-sub">{r.requestedBy?.email}</span>
                   </td>
                   <td>{r.quantity}</td>
+                  <td>{formatDate(r.neededUntil)}</td>
                   <td>{formatDate(r.createdAt)}</td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
@@ -152,6 +154,7 @@ export default function LibrarianRequests() {
             <p><span>Author</span>{selected.author}</p>
             {selected.isbn && <p><span>ISBN</span>{selected.isbn}</p>}
             <p><span>Quantity</span>{selected.quantity}</p>
+            <p><span>Needed until</span>{formatDate(selected.neededUntil)}</p>
             <p><span>Requested by</span>{selected.requestedBy?.name}</p>
             <p><span>Reason</span>{selected.reason || "-"}</p>
             <p><span>Status</span>{statusBadge(selected.status)}</p>

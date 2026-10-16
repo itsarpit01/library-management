@@ -12,14 +12,12 @@ const NAV = {
     { to: "/librarian/books", label: "Books", icon: BookIcon },
     { to: "/librarian/issues", label: "Issue / Return", icon: IssueIcon },
     { to: "/librarian/requests", label: "Requests", icon: RequestIcon },
-    { to: "/librarian/borrow-requests", label: "Borrow Requests", icon: IssueIcon },
   ],
   purchaser: [
     { to: "/purchaser", label: "Dashboard", icon: DashboardIcon, end: true },
     { to: "/purchaser/books", label: "Browse Books", icon: BookIcon },
     { to: "/purchaser/my-issues", label: "My Issues", icon: IssueIcon },
     { to: "/purchaser/requests", label: "My Requests", icon: RequestIcon },
-    { to: "/purchaser/borrow-requests", label: "Borrow Requests", icon: IssueIcon },
   ],
 };
 
@@ -35,7 +33,7 @@ export default function AppLayout() {
   const handleLogout = async () => {
     setConfirmLogout(false);
     setOpen(false);
-    await logout(); // server cookie clear hone ke baad redirect
+    await logout();
     toast.info("Logged out");
     navigate("/login", { replace: true });
   };
