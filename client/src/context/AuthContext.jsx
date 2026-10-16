@@ -23,10 +23,16 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async (name, email, password, role = "purchaser") => {
-    const { data } = await api.post("/auth/register", { name, email, password, role });
+  // role nahi bhejte: backend hamesha purchaser banata hai
+  const register = async (name, email, password) => {
+    const { data } = await api.post("/auth/register", { name, email, password });
     return data;
   };
+
+  // Profile page naam badalne ke baad topbar update karne ke liye
+  const updateUser = useCallback((changes) => {
+    setUser((u) => (u ? { ...u, ...changes } : u));
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -47,7 +53,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, setUser, loading, isAuthenticated, login, register, logout }}
+      value={{ user, setUser, updateUser, loading, isAuthenticated, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>
