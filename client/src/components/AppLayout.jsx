@@ -11,7 +11,7 @@ const NAV = {
     { to: "/librarian", label: "Dashboard", icon: DashboardIcon, end: true },
     { to: "/librarian/books", label: "Books", icon: BookIcon },
     { to: "/librarian/issues", label: "Issue / Return", icon: IssueIcon },
-    { to: "/librarian/requests", label: "Purchase Requests", icon: RequestIcon },
+    { to: "/librarian/requests", label: "Requests", icon: RequestIcon },
   ],
   purchaser: [
     { to: "/purchaser", label: "Dashboard", icon: DashboardIcon, end: true },

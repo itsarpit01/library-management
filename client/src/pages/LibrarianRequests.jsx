@@ -9,16 +9,16 @@ import Modal from "../components/Modal";
 import { CheckIcon, XIcon } from "../components/Icons";
 
 const TABS = [
+   { key: "", label: "All" },
   { key: "pending", label: "Pending" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
-  { key: "", label: "All" },
 ];
 
 export default function LibrarianRequests() {
   const toast = useToast();
   const [requests, setRequests] = useState([]);
-  const [tab, setTab] = useState("pending");
+  const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [selected, setSelected] = useState(null);
