@@ -10,6 +10,7 @@ const issueSchema = new mongoose.Schema(
     returnDate: { type: Date },
     status: { type: String, enum: ["issued", "returned"], default: "issued" },
     fine: { type: Number, default: 0, min: 0 },
+    reissueCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

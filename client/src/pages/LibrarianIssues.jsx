@@ -4,6 +4,7 @@ import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import IssueFormModal from "../components/IssueFormModal";
+import ReissueModal from "../components/ReissueModal";
 import Modal from "../components/Modal";
 import { PlusIcon, ReturnIcon } from "../components/Icons";
 
@@ -23,6 +24,7 @@ export default function LibrarianIssues() {
 
   const [showForm, setShowForm] = useState(false);
   const [toReturn, setToReturn] = useState(null);
+  const [toReissue, setToReissue] = useState(null);
   const [returning, setReturning] = useState(false);
 
   const loadIssues = useCallback(async () => {
@@ -44,6 +46,11 @@ export default function LibrarianIssues() {
 
   const handleIssued = () => {
     setShowForm(false);
+    loadIssues();
+  };
+
+  const handleReissued = () => {
+    setToReissue(null);
     loadIssues();
   };
 
@@ -125,15 +132,27 @@ export default function LibrarianIssues() {
                     <span className="cell-sub">{i.member?.email}</span>
                   </td>
                   <td>{formatDate(i.issueDate)}</td>
-                  <td>{formatDate(i.dueDate)}</td>
+                  <td>
+                    {formatDate(i.dueDate)}
+                    {i.reissueCount > 0 && (
+                      <span className="cell-sub">Reissued {i.reissueCount}x</span>
+                    )}
+                  </td>
                   <td>{formatDate(i.returnDate)}</td>
                   <td>{statusBadge(i)}</td>
                   <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
                   <td>
                     {i.status === "issued" && (
-                      <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
-                        <ReturnIcon size={16} /> Return
-                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {i.canReissue && (
+                          <button className="btn btn-soft btn-sm" onClick={() => setToReissue(i)}>
+                            Reissue
+                          </button>
+                        )}
+                        <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
+                          <ReturnIcon size={16} /> Return
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -144,6 +163,15 @@ export default function LibrarianIssues() {
       )}
 
       {showForm && <IssueFormModal onClose={() => setShowForm(false)} onSaved={handleIssued} />}
+
+      {toReissue && (
+        <ReissueModal
+          issue={toReissue}
+          mode="direct"
+          onClose={() => setToReissue(null)}
+          onSaved={handleReissued}
+        />
+      )}
 
       {toReturn && (
         <Modal title="Return book" onClose={() => setToReturn(null)}>

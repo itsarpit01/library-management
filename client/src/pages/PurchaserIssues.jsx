@@ -3,6 +3,7 @@ import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
+import ReissueModal from "../components/ReissueModal";
 
 const TABS = [
   { key: "", label: "All" },
@@ -16,6 +17,7 @@ export default function PurchaserIssues() {
   const [issues, setIssues] = useState([]);
   const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toReissue, setToReissue] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,7 +34,6 @@ export default function PurchaserIssues() {
   useEffect(() => {
     load();
   }, [load]);
-
 
   const visible = issues.filter((i) => {
     if (tab === "issued") return i.status === "issued";
@@ -84,6 +85,7 @@ export default function PurchaserIssues() {
                 <th>Returned</th>
                 <th>Status</th>
                 <th>Fine</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -94,15 +96,42 @@ export default function PurchaserIssues() {
                     <span className="cell-sub">{i.book?.author}</span>
                   </td>
                   <td>{formatDate(i.issueDate)}</td>
-                  <td>{formatDate(i.dueDate)}</td>
+                  <td>
+                    {formatDate(i.dueDate)}
+                    {i.reissueCount > 0 && (
+                      <span className="cell-sub">Reissued {i.reissueCount}x</span>
+                    )}
+                  </td>
                   <td>{formatDate(i.returnDate)}</td>
                   <td>{statusBadge(i)}</td>
                   <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
+                  <td>
+                    {i.canReissue ? (
+                      <button className="btn btn-soft btn-sm" onClick={() => setToReissue(i)}>
+                        Request reissue
+                      </button>
+                    ) : (
+                      i.status === "issued" &&
+                      i.isOverdue && <span className="cell-sub">Return to library</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {toReissue && (
+        <ReissueModal
+          issue={toReissue}
+          mode="request"
+          onClose={() => setToReissue(null)}
+          onSaved={() => {
+            setToReissue(null);
+            toast.info("Track it under Borrow Requests");
+          }}
+        />
       )}
     </>
   );

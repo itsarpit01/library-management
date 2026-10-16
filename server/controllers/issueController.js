@@ -1,88 +1,38 @@
 import Issue from "../models/Issue.js";
 import Book from "../models/Book.js";
-import User from "../models/User.js";
 import { calcFine, withOverdueInfo } from "../utils/fine.js";
+import { createIssue, reissueIssue, populateIssue } from "../services/issueService.js";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const populateIssue = (query) =>
-  query
-    .populate("book", "title author isbn")
-    .populate("member", "name email")
-    .populate("issuedBy", "name");
-
-
+// POST /api/issues (librarian) body: { bookId, memberId, dueDate }
 export const issueBook = async (req, res) => {
-  const { bookId, memberId } = req.body;
-  const days = req.body.days ?? 14;
-
-  const member = await User.findById(memberId);
-  if (!member || member.role !== "purchaser") {
-    return res.status(404).json({ message: "Member not found" });
-  }
-
-  const already = await Issue.findOne({
-    book: bookId,
-    member: memberId,
-    status: "issued",
-  });
-  if (already) {
-    return res
-      .status(400)
-      .json({ message: "This member already has this book issued" });
-  }
-
-  const book = await Book.findOneAndUpdate(
-    { _id: bookId, availableCopies: { $gt: 0 } },
-    { $inc: { availableCopies: -1 } },
-    { new: true }
-  );
-
-  if (!book) {
-    const exists = await Book.exists({ _id: bookId });
-    return res
-      .status(exists ? 400 : 404)
-      .json({ message: exists ? "No copies available" : "Book not found" });
-  }
-
-  try {
-    const issue = await Issue.create({
-      book: bookId,
-      member: memberId,
-      issuedBy: req.user.id,
-      dueDate: new Date(Date.now() + days * DAY_MS),
-    });
-
-    const populated = await populateIssue(Issue.findById(issue._id));
-    res.status(201).json(withOverdueInfo(populated));
-  } catch (err) {
-
-    await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
-    throw err;
-  }
+  const { bookId, memberId, dueDate } = req.body;
+  const issue = await createIssue({ bookId, memberId, dueDate, issuedBy: req.user.id });
+  res.status(201).json(withOverdueInfo(issue));
 };
 
+// PATCH /api/issues/:id/reissue (librarian) body: { dueDate }
+export const reissue = async (req, res) => {
+  const issue = await reissueIssue({ issueId: req.params.id, dueDate: req.body.dueDate });
+  res.json(withOverdueInfo(issue));
+};
 
+// PATCH /api/issues/:id/return (librarian)
 export const returnBook = async (req, res) => {
   const issue = await Issue.findById(req.params.id);
-  if (!issue) {
-    return res.status(404).json({ message: "Issue record not found" });
-  }
+  if (!issue) return res.status(404).json({ message: "Issue record not found" });
   if (issue.status === "returned") {
     return res.status(400).json({ message: "Book already returned" });
   }
 
   const now = new Date();
 
-
+  // status: "issued" condition se double return nahi hoga
   const updated = await Issue.findOneAndUpdate(
     { _id: issue._id, status: "issued" },
     { status: "returned", returnDate: now, fine: calcFine(issue.dueDate, now) },
     { new: true }
   );
-  if (!updated) {
-    return res.status(400).json({ message: "Book already returned" });
-  }
+  if (!updated) return res.status(400).json({ message: "Book already returned" });
 
   await Book.findByIdAndUpdate(issue.book, { $inc: { availableCopies: 1 } });
 
@@ -90,7 +40,7 @@ export const returnBook = async (req, res) => {
   res.json(withOverdueInfo(populated));
 };
 
-
+// GET /api/issues?status=issued|returned|overdue (librarian)
 export const getIssues = async (req, res) => {
   const { status } = req.query;
   const filter = {};
@@ -101,13 +51,11 @@ export const getIssues = async (req, res) => {
     filter.dueDate = { $lt: new Date() };
   }
 
-  const issues = await populateIssue(
-    Issue.find(filter).sort({ createdAt: -1 })
-  );
+  const issues = await populateIssue(Issue.find(filter).sort({ createdAt: -1 }));
   res.json(issues.map(withOverdueInfo));
 };
 
-
+// GET /api/issues/my (purchaser)
 export const getMyIssues = async (req, res) => {
   const issues = await populateIssue(
     Issue.find({ member: req.user.id }).sort({ createdAt: -1 })

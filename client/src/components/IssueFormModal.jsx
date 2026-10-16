@@ -4,6 +4,7 @@ import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
 import { issueFormSchema } from "../schemas/issueSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
+import { dateInput, MAX_ISSUE_DAYS } from "../utils/format";
 
 const toList = (data) => (Array.isArray(data) ? data : data?.data || []);
 
@@ -14,7 +15,7 @@ export default function IssueFormModal({ onClose, onSaved }) {
   const [books, setBooks] = useState([]);
   const [loadingLists, setLoadingLists] = useState(true);
 
-  const [form, setForm] = useState({ memberId: "", bookId: "", days: 14 });
+  const [form, setForm] = useState({ memberId: "", bookId: "", dueDate: dateInput(14) });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -100,9 +101,21 @@ export default function IssueFormModal({ onClose, onSaved }) {
         </div>
 
         <div className="field">
-          <label htmlFor="days">Issue for (days)</label>
-          <input id="days" name="days" type="number" min={1} max={60} value={form.days} onChange={change} />
-          {errors.days && <span className="error-text">{errors.days}</span>}
+          <label htmlFor="dueDate">Return by</label>
+          <input
+            id="dueDate"
+            name="dueDate"
+            type="date"
+            min={dateInput(1)}
+            max={dateInput(MAX_ISSUE_DAYS)}
+            value={form.dueDate}
+            onChange={change}
+          />
+          {errors.dueDate ? (
+            <span className="error-text">{errors.dueDate}</span>
+          ) : (
+            <span className="hint">Max {MAX_ISSUE_DAYS} days. After that the book must be reissued.</span>
+          )}
         </div>
 
         <div className="modal-actions">
