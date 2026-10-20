@@ -11,7 +11,7 @@ export default function Register() {
   const { register } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,6 @@ export default function Register() {
 
     setLoading(true);
     try {
-     
       await register(parsed.data.name, parsed.data.email, parsed.data.password);
       toast.success("Account created. Please login.");
       navigate("/login", { replace: true });
@@ -98,6 +97,20 @@ export default function Register() {
             <span className="hint">
               Min 8 characters with capital, small letter, number and special character.
             </span>
+          )}
+        </div>
+
+        <div className="field">
+          <label htmlFor="confirmPassword">Confirm Password</label>
+          <PasswordInput
+            id="confirmPassword"
+            name="confirmPassword"
+            placeholder="Re-enter your password"
+            value={form.confirmPassword}
+            onChange={handleChange}
+          />
+          {errors.confirmPassword && (
+            <span className="error-text">{errors.confirmPassword}</span>
           )}
         </div>
 

@@ -11,8 +11,8 @@ const bookFields = {
   author: z.string({ error: "Author is required" }).trim().min(1, "Author is required").max(100),
   isbn: isbnSchema,
   category: z.string().trim().max(50),
-  price: z.number({ error: "Price must be a number" }).nonnegative("Price cannot be negative"),
-  totalCopies: z
+  price: z.coerce.number({ error: "Price must be a number" }).nonnegative("Price cannot be negative"),
+  totalCopies: z.coerce
     .number({ error: "Total copies must be a number" })
     .int("Total copies must be a whole number")
     .min(1, "At least 1 copy is required"),

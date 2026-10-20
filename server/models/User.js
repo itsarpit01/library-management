@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
       enum: ["librarian", "purchaser"],
       default: "purchaser",
     },
+    avatar: { type: String, default: "" },
   },
   { timestamps: true }
 );

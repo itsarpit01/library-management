@@ -6,6 +6,7 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  avatar: user.avatar,
 });
 
 // GET /api/users/members (librarian)
@@ -23,11 +24,17 @@ export const getMe = async (req, res) => {
   res.json({ ...publicUser(user), createdAt: user.createdAt });
 };
 
-// PATCH /api/users/me (any logged-in user): sirf name
+// PATCH /api/users/me (any logged-in user): name + avatar
 export const updateMe = async (req, res) => {
+  const updateData = { name: req.body.name };
+
+  if (req.file) {
+    updateData.avatar = `/uploads/profiles/${req.file.filename}`;
+  }
+
   const user = await User.findByIdAndUpdate(
     req.user.id,
-    { name: req.body.name },
+    updateData,
     { new: true }
   );
   if (!user) return res.status(404).json({ message: "User not found" });

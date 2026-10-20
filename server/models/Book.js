@@ -9,6 +9,7 @@ const bookSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     totalCopies: { type: Number, required: true, min: 1, default: 1 },
     availableCopies: { type: Number, min: 0 },
+    coverImage: { type: String, default: "" },
   },
   { timestamps: true }
 );

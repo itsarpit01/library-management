@@ -30,6 +30,7 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.json({ limit: "10kb" }));
+app.use("/uploads", express.static("uploads"));
 
 app.get("/", (req, res) => {
   res.send("Library API is running...");

@@ -7,6 +7,7 @@ import { profileSchema, passwordFormSchema } from "../schemas/profileSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
 
+const SERVER_URL = "http://localhost:5000";
 const emptyPw = { currentPassword: "", newPassword: "", confirmPassword: "" };
 
 export default function Profile() {
@@ -17,6 +18,9 @@ export default function Profile() {
   const [name, setName] = useState(user?.name || "");
   const [nameError, setNameError] = useState("");
   const [savingName, setSavingName] = useState(false);
+
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   const [pw, setPw] = useState(emptyPw);
   const [pwErrors, setPwErrors] = useState({});
@@ -33,6 +37,13 @@ export default function Profile() {
       .catch((err) => toast.error(getErrorMessage(err)));
   }, [toast]);
 
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
   const saveName = async (e) => {
     e.preventDefault();
     setNameError("");
@@ -45,10 +56,16 @@ export default function Profile() {
 
     setSavingName(true);
     try {
-      const { data } = await api.patch("/users/me", parsed.data);
-      updateUser({ name: data.user.name });
-      setProfile((p) => ({ ...p, name: data.user.name }));
+      const fd = new FormData();
+      fd.append("name", parsed.data.name);
+      if (avatarFile) fd.append("avatar", avatarFile);
+
+      const { data } = await api.patch("/users/me", fd);
+      updateUser({ name: data.user.name, avatar: data.user.avatar });
+      setProfile((p) => ({ ...p, name: data.user.name, avatar: data.user.avatar }));
       setName(data.user.name);
+      setAvatarFile(null);
+      setAvatarPreview(null);
       toast.success("Profile updated");
     } catch (err) {
       const fe = getFieldErrors(err);
@@ -94,7 +111,8 @@ export default function Profile() {
     }
   };
 
-  const unchanged = name.trim() === (profile?.name ?? user?.name);
+  const avatarSrc = avatarPreview || (profile?.avatar ? `${SERVER_URL}${profile.avatar}` : null);
+  const unchanged = name.trim() === (profile?.name ?? user?.name) && !avatarFile;
 
   return (
     <>
@@ -108,12 +126,31 @@ export default function Profile() {
       <div className="profile-grid">
         <form className="card" onSubmit={saveName} noValidate>
           <div className="profile-head">
-            <span className="avatar avatar-lg">{user?.name?.[0]?.toUpperCase()}</span>
+            <label htmlFor="avatarInput" style={{ cursor: "pointer" }}>
+              {avatarSrc ? (
+                <img
+                  className="avatar avatar-lg"
+                  src={avatarSrc}
+                  alt="avatar"
+                  style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }}
+                />
+              ) : (
+                <span className="avatar avatar-lg">{user?.name?.[0]?.toUpperCase()}</span>
+              )}
+              <input
+                id="avatarInput"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleAvatarChange}
+                hidden
+              />
+            </label>
             <div>
               <h3 style={{ margin: 0 }}>{profile?.name || user?.name}</h3>
               <span className="badge" style={{ textTransform: "capitalize" }}>
                 {user?.role}
               </span>
+              <p className="hint" style={{ margin: "4px 0 0" }}>Click photo to change</p>
             </div>
           </div>
 

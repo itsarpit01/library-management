@@ -59,7 +59,13 @@ export const createBook = async (req, res) => {
     return res.status(409).json({ message: "Book with this ISBN already exists" });
   }
 
-  const book = await Book.create({ ...req.body, availableCopies: totalCopies });
+  const bookData = { ...req.body, availableCopies: totalCopies };
+
+  if (req.file) {
+    bookData.coverImage = `/uploads/books/${req.file.filename}`;
+  }
+
+  const book = await Book.create(bookData);
   res.status(201).json(book);
 };
 
@@ -87,6 +93,11 @@ export const updateBook = async (req, res) => {
   }
 
   Object.assign(book, rest);
+
+  if (req.file) {
+    book.coverImage = `/uploads/books/${req.file.filename}`;
+  }
+
   const updated = await book.save();
   res.json(updated);
 };

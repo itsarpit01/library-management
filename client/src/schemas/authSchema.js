@@ -10,4 +10,8 @@ export const registerFormSchema = z.object({
     .regex(/[a-z]/, "Add at least one small letter")
     .regex(/[0-9]/, "Add at least one number")
     .regex(/[^A-Za-z0-9]/, "Add at least one special character"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });

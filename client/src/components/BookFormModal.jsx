@@ -5,6 +5,7 @@ import { useToast } from "../context/ToastContext";
 import { bookFormSchema } from "../schemas/bookSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 
+const SERVER_URL = "http://localhost:5000";
 const empty = { title: "", author: "", isbn: "", category: "", price: "", totalCopies: 1 };
 
 export default function BookFormModal({ book, onClose, onSaved }) {
@@ -27,9 +28,21 @@ export default function BookFormModal({ book, onClose, onSaved }) {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(
+    isEdit && book.coverImage ? `${SERVER_URL}${book.coverImage}` : null
+  );
+
   const change = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setErrors((er) => ({ ...er, [e.target.name]: undefined }));
+  };
+
+  const handleCoverChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
   };
 
   const submit = async (e) => {
@@ -51,13 +64,17 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     const payload = { ...parsed.data };
     if (!payload.category) delete payload.category;
 
+    const fd = new FormData();
+    Object.entries(payload).forEach(([key, val]) => fd.append(key, val));
+    if (coverFile) fd.append("coverImage", coverFile);
+
     setSaving(true);
     try {
       if (isEdit) {
-        await api.put(`/books/${book._id}`, payload);
+        await api.put(`/books/${book._id}`, fd);
         toast.success("Book updated");
       } else {
-        await api.post("/books", payload);
+        await api.post("/books", fd);
         toast.success("Book added");
       }
       onSaved();
@@ -92,6 +109,24 @@ export default function BookFormModal({ book, onClose, onSaved }) {
         <div className="form-row">
           {Field({ name: "price", label: "Price (₹)", type: "number", min: 0 })}
           {Field({ name: "totalCopies", label: "Total copies", type: "number", min: 1 })}
+        </div>
+
+        <div className="field">
+          <label htmlFor="coverImage">Cover Image</label>
+          <input
+            id="coverImage"
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            onChange={handleCoverChange}
+          />
+          {coverPreview && (
+            <img
+              src={coverPreview}
+              alt="cover preview"
+              style={{ marginTop: 8, maxHeight: 120, borderRadius: 6, objectFit: "cover" }}
+            />
+          )}
+          <span className="hint">Max 2MB. Formats: jpeg, png, webp</span>
         </div>
 
         <div className="modal-actions">
