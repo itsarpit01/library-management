@@ -113,19 +113,43 @@ export default function BookFormModal({ book, onClose, onSaved }) {
 
         <div className="field">
           <label htmlFor="coverImage">Cover Image</label>
-          <input
-            id="coverImage"
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,image/webp"
-            onChange={handleCoverChange}
-          />
-          {coverPreview && (
-            <img
-              src={coverPreview}
-              alt="cover preview"
-              style={{ marginTop: 8, maxHeight: 120, borderRadius: 6, objectFit: "cover" }}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {coverPreview && (
+              <span style={{ position: "relative", display: "inline-block", flexShrink: 0 }}>
+                <img
+                  src={coverPreview}
+                  alt="cover"
+                  style={{ width: 56, height: 72, borderRadius: 6, objectFit: "cover" }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: -4,
+                    right: -4,
+                    background: "var(--primary, #5c6bc0)",
+                    borderRadius: "50%",
+                    width: 20,
+                    height: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "2px solid white",
+                  }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </span>
+              </span>
+            )}
+            <input
+              id="coverImage"
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              onChange={handleCoverChange}
             />
-          )}
+          </div>
           <span className="hint">Max 2MB. Formats: jpeg, png, webp</span>
         </div>
 

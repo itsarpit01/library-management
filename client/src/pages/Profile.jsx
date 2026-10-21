@@ -126,7 +126,7 @@ export default function Profile() {
       <div className="profile-grid">
         <form className="card" onSubmit={saveName} noValidate>
           <div className="profile-head">
-            <label htmlFor="avatarInput" style={{ cursor: "pointer" }}>
+            <label htmlFor="avatarInput" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
               {avatarSrc ? (
                 <img
                   className="avatar avatar-lg"
@@ -137,6 +137,26 @@ export default function Profile() {
               ) : (
                 <span className="avatar avatar-lg">{user?.name?.[0]?.toUpperCase()}</span>
               )}
+              <span
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0,
+                  background: "var(--primary, #5c6bc0)",
+                  borderRadius: "50%",
+                  width: 22,
+                  height: 22,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px solid white",
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </span>
               <input
                 id="avatarInput"
                 type="file"
@@ -150,7 +170,6 @@ export default function Profile() {
               <span className="badge" style={{ textTransform: "capitalize" }}>
                 {user?.role}
               </span>
-              <p className="hint" style={{ margin: "4px 0 0" }}>Click photo to change</p>
             </div>
           </div>
 

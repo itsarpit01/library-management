@@ -1,10 +1,20 @@
+const SERVER_URL = "http://localhost:5000";
+
 export default function BookCard({ book, actions }) {
   const available = book.availableCopies > 0;
 
   return (
     <div className="card book-card">
       <div className="book-cover">
-        <span>{book.title.charAt(0).toUpperCase()}</span>
+        {book.coverImage ? (
+          <img
+            src={`${SERVER_URL}${book.coverImage}`}
+            alt={book.title}
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+          />
+        ) : (
+          <span>{book.title.charAt(0).toUpperCase()}</span>
+        )}
       </div>
 
       <div className="book-body">
