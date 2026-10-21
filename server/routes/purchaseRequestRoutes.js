@@ -6,6 +6,7 @@ import {
   cancelRequest,
   getAllRequests,
   reviewRequest,
+  acceptCounterOffer,
 } from "../controllers/purchaseRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -23,6 +24,7 @@ router.use(protect);
 router.post("/", authorizeRoles("purchaser"), validate(createRequestSchema), createRequest);
 router.get("/my", authorizeRoles("purchaser"), getMyRequests);
 router.patch("/:id", authorizeRoles("purchaser"), validate(updateRequestSchema), updateRequest);
+router.patch("/:id/accept-counter", authorizeRoles("purchaser"), acceptCounterOffer);
 router.delete("/:id", authorizeRoles("purchaser"), cancelRequest);
 
 // Librarian

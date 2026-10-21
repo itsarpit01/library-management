@@ -13,10 +13,12 @@ const purchaseRequestSchema = new mongoose.Schema(
     author: { type: String, required: true, trim: true },
     isbn: { type: String, trim: true },
     quantity: { type: Number, required: true, min: 1, default: 1 },
+    neededUntil: { type: Date },
+    proposedDate: { type: Date },
     reason: { type: String, required: true, trim: true },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "counter_offered", "approved", "rejected"],
       default: "pending",
       index: true,
     },
