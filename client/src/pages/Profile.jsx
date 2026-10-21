@@ -21,6 +21,7 @@ export default function Profile() {
 
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [pw, setPw] = useState(emptyPw);
   const [pwErrors, setPwErrors] = useState({});
@@ -37,11 +38,53 @@ export default function Profile() {
       .catch((err) => toast.error(getErrorMessage(err)));
   }, [toast]);
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
+  const processAvatar = (file) => {
     if (!file) return;
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Only image files (jpeg, jpg, png, webp) are allowed");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("File size must be under 2MB");
+      return;
+    }
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleAvatarChange = (e) => {
+    processAvatar(e.target.files[0]);
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processAvatar(files[0]);
+    }
   };
 
   const saveName = async (e) => {
@@ -126,37 +169,56 @@ export default function Profile() {
       <div className="profile-grid">
         <form className="card" onSubmit={saveName} noValidate>
           <div className="profile-head">
-            <label htmlFor="avatarInput" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
-              {avatarSrc ? (
-                <img
-                  className="avatar avatar-lg"
-                  src={avatarSrc}
-                  alt="avatar"
-                  style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }}
-                />
-              ) : (
-                <span className="avatar avatar-lg">{user?.name?.[0]?.toUpperCase()}</span>
-              )}
-              <span
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  right: 0,
-                  background: "var(--primary, #5c6bc0)",
-                  borderRadius: "50%",
-                  width: 22,
-                  height: 22,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "2px solid white",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-              </span>
+            <label
+              htmlFor="avatarInput"
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              style={{
+                cursor: "pointer",
+                position: "relative",
+                display: "inline-block",
+                padding: 4,
+                borderRadius: "50%",
+                border: isDragging ? "2px dashed var(--primary, #5c6bc0)" : "2px dashed transparent",
+                transform: isDragging ? "scale(1.12)" : "scale(1)",
+                transition: "all 0.2s ease",
+              }}
+              title="Click or drag and drop image here"
+            >
+              <div style={{ pointerEvents: "none" }}>
+                {avatarSrc ? (
+                  <img
+                    className="avatar avatar-lg"
+                    src={avatarSrc}
+                    alt="avatar"
+                    style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <span className="avatar avatar-lg">{user?.name?.[0]?.toUpperCase()}</span>
+                )}
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    background: "var(--primary, #5c6bc0)",
+                    borderRadius: "50%",
+                    width: 22,
+                    height: 22,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "2px solid white",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </span>
+              </div>
               <input
                 id="avatarInput"
                 type="file"

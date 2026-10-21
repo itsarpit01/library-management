@@ -49,7 +49,6 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     e.preventDefault();
     setFormError("");
 
-  
     const parsed = bookFormSchema.safeParse(form);
     if (!parsed.success) {
       const fe = {};
@@ -87,9 +86,12 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     }
   };
 
-  const Field = ({ name, label, type = "text", hint, ...rest }) => (
+  const Field = ({ name, label, type = "text", hint, required = false, ...rest }) => (
     <div className="field">
-      <label htmlFor={name}>{label}</label>
+      <label htmlFor={name}>
+        {label}
+        {required && <span style={{ color: "var(--danger, #e53935)", marginLeft: 4 }}>*</span>}
+      </label>
       <input id={name} name={name} type={type} value={form[name]} onChange={change} {...rest} />
       {hint && !errors[name] && <span className="hint">{hint}</span>}
       {errors[name] && <span className="error-text">{errors[name]}</span>}
@@ -101,14 +103,14 @@ export default function BookFormModal({ book, onClose, onSaved }) {
       <form onSubmit={submit} noValidate>
         {formError && <div className="alert-error">{formError}</div>}
 
-        {Field({ name: "title", label: "Title" })}
-        {Field({ name: "author", label: "Author" })}
-        {Field({ name: "isbn", label: "ISBN", hint: "10 or 13 digits, hyphens allowed" })}
+        {Field({ name: "title", label: "Title", required: true })}
+        {Field({ name: "author", label: "Author", required: true })}
+        {Field({ name: "isbn", label: "ISBN", hint: "10 or 13 digits, hyphens allowed", required: true })}
         {Field({ name: "category", label: "Category" })}
 
         <div className="form-row">
-          {Field({ name: "price", label: "Price (₹)", type: "number", min: 0 })}
-          {Field({ name: "totalCopies", label: "Total copies", type: "number", min: 1 })}
+          {Field({ name: "price", label: "Price (₹)", type: "number", min: 0, required: true })}
+          {Field({ name: "totalCopies", label: "Total copies", type: "number", min: 1, required: true })}
         </div>
 
         <div className="field">
