@@ -6,6 +6,7 @@ import { formatDate, dateInput, toDateInput } from "../utils/format";
 import { reviewSchema } from "../schemas/requestSchema";
 import { statusBadge } from "./PurchaserRequests";
 import Modal from "../components/Modal";
+import IssueFormModal from "../components/IssueFormModal";
 import { CheckIcon, XIcon } from "../components/Icons";
 
 const TABS = [
@@ -28,6 +29,9 @@ export default function LibrarianRequests() {
   const [noteError, setNoteError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // State to automatically trigger IssueFormModal upon approval
+  const [issueModalData, setIssueModalData] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,13 +84,25 @@ export default function LibrarianRequests() {
       await api.patch(`/purchase-requests/${selected._id}/review`, payload);
       toast.success(
         status === "approved"
-          ? "Request approved"
+          ? "Request approved! Opening issue form..."
           : status === "counter_offered"
           ? "Counter offer sent to member"
           : "Request rejected"
       );
+
+      const approvedReq = selected;
       setSelected(null);
       load();
+
+      // If approved, automatically launch IssueFormModal with prefilled member, book & date
+      if (status === "approved") {
+        setIssueModalData({
+          memberId: approvedReq.requestedBy?._id,
+          member: approvedReq.requestedBy,
+          bookId: approvedReq.book?._id || approvedReq.book,
+          dueDate: approvedReq.neededUntil,
+        });
+      }
     } catch (err) {
       const fe = getFieldErrors(err);
       if (fe.reviewNote) setNoteError(fe.reviewNote);
@@ -222,7 +238,7 @@ export default function LibrarianRequests() {
                   Propose Date
                 </button>
                 <button className="btn" onClick={() => review("approved")} disabled={saving}>
-                  <CheckIcon size={16} /> Approve
+                  <CheckIcon size={16} /> Approve & Issue
                 </button>
               </div>
             </>
@@ -234,6 +250,18 @@ export default function LibrarianRequests() {
             </div>
           )}
         </Modal>
+      )}
+
+      {/* Automatically opens IssueFormModal when request is approved */}
+      {issueModalData && (
+        <IssueFormModal
+          initial={issueModalData}
+          onClose={() => setIssueModalData(null)}
+          onSaved={() => {
+            setIssueModalData(null);
+            load();
+          }}
+        />
       )}
     </>
   );
