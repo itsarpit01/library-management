@@ -1,12 +1,13 @@
 import express from "express";
 import {
   issueBook,
-  returnBook,
   reissue,
+  returnBook,
   getIssues,
   getMyIssues,
+  requestReissue,
 } from "../controllers/issueController.js";
-import { authorizeRoles } from "../middleware/authMiddleware.js";
+import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
 import {
   issueBookSchema,
@@ -16,19 +17,33 @@ import {
 
 const router = express.Router();
 
-// Purchaser: apni issues
+router.use(protect);
+
+// Purchaser route
 router.get("/my", authorizeRoles("purchaser"), getMyIssues);
+router.patch(
+  "/:id/request-reissue",
+  authorizeRoles("purchaser"),
+  validate(issueIdParamSchema, "params"),
+  validate(reissueSchema),
+  requestReissue
+);
 
-// Neeche ke sab routes sirf librarian ke liye
-router.use(authorizeRoles("librarian"));
-
-router.route("/").get(getIssues).post(validate(issueBookSchema), issueBook);
-router.patch("/:id/return", validate(issueIdParamSchema, "params"), returnBook);
+// Librarian routes
+router.get("/", authorizeRoles("librarian"), getIssues);
+router.post("/", authorizeRoles("librarian"), validate(issueBookSchema), issueBook);
 router.patch(
   "/:id/reissue",
+  authorizeRoles("librarian"),
   validate(issueIdParamSchema, "params"),
   validate(reissueSchema),
   reissue
+);
+router.patch(
+  "/:id/return",
+  authorizeRoles("librarian"),
+  validate(issueIdParamSchema, "params"),
+  returnBook
 );
 
 export default router;

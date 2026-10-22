@@ -9,7 +9,9 @@ import { dateInput, formatDate, toDateInput, MAX_ISSUE_DAYS } from "../utils/for
 // mode: "direct" (librarian) ya "request" (purchaser)
 export default function ReissueModal({ issue, mode, onClose, onSaved }) {
   const toast = useToast();
-  const [dueDate, setDueDate] = useState(dateInput(MAX_ISSUE_DAYS));
+  const [dueDate, setDueDate] = useState(
+    issue.reissueRequestedDate ? toDateInput(issue.reissueRequestedDate) : dateInput(MAX_ISSUE_DAYS)
+  );
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,11 +30,11 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
     setSaving(true);
     try {
       if (isRequest) {
-        await api.post("/borrow-requests", { type: "reissue", issueId: issue._id, dueDate });
+        await api.patch(`/issues/${issue._id}/request-reissue`, { dueDate });
         toast.success("Reissue request sent to librarian");
       } else {
         await api.patch(`/issues/${issue._id}/reissue`, { dueDate });
-        toast.success("Book reissued");
+        toast.success("Book reissued successfully");
       }
       onSaved();
     } catch (err) {
@@ -53,10 +55,16 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
           <p><span>Book</span>{issue.book?.title}</p>
           <p><span>Current due</span>{formatDate(issue.dueDate)}</p>
           <p><span>Reissued</span>{issue.reissueCount || 0} time(s)</p>
+          {issue.reissueRequested && (
+            <p>
+              <span>Requested date</span>
+              <strong style={{ color: "var(--primary, #5c6bc0)" }}>{formatDate(issue.reissueRequestedDate)}</strong>
+            </p>
+          )}
         </div>
 
         <div className="field" style={{ marginTop: 14 }}>
-          <label htmlFor="dueDate">New return date</label>
+          <label htmlFor="dueDate">{isRequest ? "Requested new return date" : "New return date"}</label>
           <input
             id="dueDate"
             type="date"
@@ -80,7 +88,7 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
             Cancel
           </button>
           <button type="submit" className="btn" disabled={saving}>
-            {saving ? "Saving..." : isRequest ? "Send request" : "Reissue"}
+            {saving ? "Saving..." : isRequest ? "Send reissue request" : "Confirm Reissue"}
           </button>
         </div>
       </form>

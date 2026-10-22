@@ -2,14 +2,14 @@ import Issue from "../models/Issue.js";
 import Book from "../models/Book.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
 import { calcFine, withOverdueInfo } from "../utils/fine.js";
-import { createIssue, reissueIssue, populateIssue } from "../services/issueService.js";
+import { createIssue, reissueIssue, populateIssue, httpError } from "../services/issueService.js";
+import { MAX_REISSUES } from "../utils/dates.js";
 
 // POST /api/issues (librarian) body: { bookId, memberId, dueDate, requestId? }
 export const issueBook = async (req, res) => {
   const { bookId, memberId, dueDate, requestId } = req.body;
   const issue = await createIssue({ bookId, memberId, dueDate, issuedBy: req.user.id });
 
-  // Link request if requestId is provided or find matching approved request
   if (requestId) {
     await PurchaseRequest.findByIdAndUpdate(requestId, { issue: issue._id });
   } else {
@@ -22,9 +22,37 @@ export const issueBook = async (req, res) => {
   res.status(201).json(withOverdueInfo(issue));
 };
 
+// PATCH /api/issues/:id/request-reissue (purchaser) body: { dueDate }
+export const requestReissue = async (req, res) => {
+  const { dueDate } = req.body;
+  const issue = await Issue.findOne({ _id: req.params.id, member: req.user.id });
+
+  if (!issue) return res.status(404).json({ message: "Issue record not found" });
+  if (issue.status !== "issued") {
+    return res.status(400).json({ message: "Only currently issued books can be reissued" });
+  }
+  if ((issue.reissueCount || 0) >= MAX_REISSUES) {
+    return res.status(400).json({ message: `Maximum reissue limit (${MAX_REISSUES}) reached` });
+  }
+
+  issue.reissueRequested = true;
+  issue.reissueRequestedDate = new Date(dueDate);
+  await issue.save();
+
+  const populated = await populateIssue(Issue.findById(issue._id));
+  res.json(withOverdueInfo(populated));
+};
+
 // PATCH /api/issues/:id/reissue (librarian) body: { dueDate }
 export const reissue = async (req, res) => {
   const issue = await reissueIssue({ issueId: req.params.id, dueDate: req.body.dueDate });
+  
+  // Reset reissueRequested flag upon successful reissue
+  await Issue.findByIdAndUpdate(req.params.id, {
+    reissueRequested: false,
+    reissueRequestedDate: null,
+  });
+
   res.json(withOverdueInfo(issue));
 };
 
@@ -38,10 +66,9 @@ export const returnBook = async (req, res) => {
 
   const now = new Date();
 
-  // status: "issued" condition se double return nahi hoga
   const updated = await Issue.findOneAndUpdate(
     { _id: issue._id, status: "issued" },
-    { status: "returned", returnDate: now, fine: calcFine(issue.dueDate, now) },
+    { status: "returned", returnDate: now, fine: calcFine(issue.dueDate, now), reissueRequested: false },
     { new: true }
   );
   if (!updated) return res.status(400).json({ message: "Book already returned" });

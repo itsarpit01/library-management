@@ -3,6 +3,7 @@ import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
+import ReissueModal from "../components/ReissueModal";
 
 const TABS = [
   { key: "", label: "All" },
@@ -16,6 +17,7 @@ export default function PurchaserIssues() {
   const [issues, setIssues] = useState([]);
   const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toReissue, setToReissue] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,13 @@ export default function PurchaserIssues() {
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
     if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
+    if (i.reissueRequested) {
+      return (
+        <span className="badge" style={{ backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffb74d" }}>
+          Reissue Requested
+        </span>
+      );
+    }
     if (i.reissueCount > 0) {
       return (
         <span
@@ -93,6 +102,7 @@ export default function PurchaserIssues() {
                 <th>Returned</th>
                 <th>Status</th>
                 <th>Fine</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -112,11 +122,38 @@ export default function PurchaserIssues() {
                   <td>{formatDate(i.returnDate)}</td>
                   <td>{statusBadge(i)}</td>
                   <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
+                  <td>
+                    {i.status === "issued" && (
+                      <div>
+                        {i.reissueRequested ? (
+                          <span className="cell-sub" style={{ color: "#e65100" }}>
+                            Req: {formatDate(i.reissueRequestedDate)}
+                          </span>
+                        ) : (i.reissueCount || 0) < 2 ? (
+                          <button className="btn btn-soft btn-sm" onClick={() => setToReissue(i)}>
+                            Request Reissue
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {toReissue && (
+        <ReissueModal
+          issue={toReissue}
+          mode="request"
+          onClose={() => setToReissue(null)}
+          onSaved={() => {
+            setToReissue(null);
+            load();
+          }}
+        />
       )}
     </>
   );

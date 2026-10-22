@@ -11,6 +11,8 @@ const issueSchema = new mongoose.Schema(
     status: { type: String, enum: ["issued", "returned"], default: "issued" },
     fine: { type: Number, default: 0, min: 0 },
     reissueCount: { type: Number, default: 0, min: 0 },
+    reissueRequested: { type: Boolean, default: false }, // ← NEW
+    reissueRequestedDate: { type: Date },                 // ← NEW
   },
   { timestamps: true }
 );

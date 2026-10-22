@@ -73,6 +73,13 @@ export default function LibrarianIssues() {
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
     if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
+    if (i.reissueRequested) {
+      return (
+        <span className="badge" style={{ backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffb74d" }}>
+          Reissue Requested
+        </span>
+      );
+    }
     if (i.reissueCount > 0) {
       return (
         <span
@@ -154,11 +161,13 @@ export default function LibrarianIssues() {
                   <td>
                     {i.status === "issued" && (
                       <div style={{ display: "flex", gap: 6 }}>
-                        {i.canReissue && (
-                          <button className="btn btn-soft btn-sm" onClick={() => setToReissue(i)}>
-                            Reissue
-                          </button>
-                        )}
+                        <button
+                          className={i.reissueRequested ? "btn btn-sm" : "btn btn-soft btn-sm"}
+                          onClick={() => setToReissue(i)}
+                          title={i.reissueRequested ? `Member requested extension till ${formatDate(i.reissueRequestedDate)}` : "Reissue book"}
+                        >
+                          {i.reissueRequested ? "Review Reissue" : "Reissue"}
+                        </button>
                         <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
                           <ReturnIcon size={16} /> Return
                         </button>
