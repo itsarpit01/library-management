@@ -4,12 +4,12 @@ import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
 import { dueDateFormSchema } from "../schemas/issueSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
-import { dateInput, formatDate, toDateInput, MAX_ISSUE_DAYS } from "../utils/format";
+import { dateInput, formatDate, toDateInput, MAX_ISSUE_DAYS, DEFAULT_ISSUE_DAYS } from "../utils/format";
 
 // mode: "direct" (librarian) ya "request" (purchaser)
 export default function ReissueModal({ issue, mode, onClose, onSaved }) {
   const toast = useToast();
-  const [dueDate, setDueDate] = useState(dateInput(MAX_ISSUE_DAYS));
+  const [dueDate, setDueDate] = useState(dateInput(DEFAULT_ISSUE_DAYS || 3));
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -71,7 +71,7 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
           {error ? (
             <span className="error-text">{error}</span>
           ) : (
-            <span className="hint">Within {MAX_ISSUE_DAYS} days from today.</span>
+            <span className="hint">Max {MAX_ISSUE_DAYS} days from today.</span>
           )}
         </div>
 

@@ -12,7 +12,8 @@ export const daysLate = (dueDate) => {
   return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 };
 
-export const MAX_ISSUE_DAYS = 3;
+export const MAX_ISSUE_DAYS = 15;
+
 
 // Date ko <input type="date"> ki value ("YYYY-MM-DD", local time) banata hai
 export const toDateInput = (value) => {

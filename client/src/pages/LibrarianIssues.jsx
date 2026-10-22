@@ -73,6 +73,16 @@ export default function LibrarianIssues() {
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
     if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
+    if (i.reissueCount > 0) {
+      return (
+        <span
+          className="badge"
+          style={{ backgroundColor: "var(--primary-subtle, #ede7f6)", color: "var(--primary, #5c6bc0)", border: "1px solid var(--primary, #5c6bc0)" }}
+        >
+          Reissued
+        </span>
+      );
+    }
     return <span className="badge badge-warning">Issued</span>;
   };
 
