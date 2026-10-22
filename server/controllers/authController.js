@@ -18,6 +18,7 @@ const publicUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  avatar: user.avatar,
 });
 
 // httpOnly cookie: JS isse padh nahi sakta (XSS se token chori nahi hoga)
@@ -78,7 +79,7 @@ export const login = async (req, res) => {
 // GET /api/auth/me  (protect ke baad): refresh par session wapas lene ke liye
 export const me = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("name email role");
+    const user = await User.findById(req.user.id).select("name email role avatar");
     if (!user) return res.status(401).json({ message: "User not found" });
     res.json({ user: publicUser(user) });
   } catch (error) {

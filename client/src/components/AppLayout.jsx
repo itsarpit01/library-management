@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import ThemeToggle from "./ThemeToggle";
 import { BookIcon, DashboardIcon, IssueIcon, RequestIcon, LogoutIcon, MenuIcon } from "./Icons";
+
+const SERVER_URL = "http://localhost:5000";
 
 const NAV = {
   librarian: [
@@ -27,8 +29,15 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const links = NAV[user.role] || [];
+  const avatarSrc = user.avatar ? `${SERVER_URL}${user.avatar}` : null;
+
+  // Nayi photo aaye to broken flag reset
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [user.avatar]);
 
   const handleLogout = async () => {
     setConfirmLogout(false);
@@ -88,7 +97,17 @@ export default function AppLayout() {
                 <strong>{user.name}</strong>
                 <span>{user.role}</span>
               </div>
-              <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
+              {avatarSrc && !avatarBroken ? (
+                <img
+                  className="avatar"
+                  src={avatarSrc}
+                  alt=""
+                  onError={() => setAvatarBroken(true)}
+                  style={{ objectFit: "cover" }}
+                />
+              ) : (
+                <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
+              )}
             </Link>
             <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>
               <LogoutIcon size={16} /> Logout
