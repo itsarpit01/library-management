@@ -7,6 +7,7 @@ import { profileSchema, passwordFormSchema } from "../schemas/profileSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
 
+
 const SERVER_URL = "http://localhost:5000";
 const emptyPw = { currentPassword: "", newPassword: "", confirmPassword: "" };
 

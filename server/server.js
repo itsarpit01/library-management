@@ -19,7 +19,7 @@ verifyMailer();
 
 const app = express();
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } })); // <- yahi badla
 
 app.use(
   cors({

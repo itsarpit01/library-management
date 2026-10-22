@@ -286,8 +286,9 @@ tr:last-child td { border-bottom: none; }
 .book-cover {
   height: 120px; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(145deg, var(--soft) 0%, var(--soft-2) 100%);
-  color: var(--primary); font-size: 44px; font-weight: 700;
+  color: var(--primary); font-size: 44px; font-weight: 700; overflow: hidden;
 }
+.book-cover img { width: 100%; height: 100%; object-fit: cover; }
 .book-body { padding: 14px 16px 8px; flex: 1; }
 .book-body h3 {
   font-size: 16px; margin-bottom: 2px;
@@ -359,3 +360,50 @@ body, .sidebar, .topbar, .card, input, select, textarea, .modal, .auth-form-side
   transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 .theme-fab { position: fixed; top: 16px; right: 16px; z-index: 30; }
+
+/* ---------- Drop zone (book cover) ---------- */
+.dz-wrap { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.dropzone {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--border); background: var(--input-bg);
+  color: var(--muted); cursor: pointer; overflow: hidden; text-align: center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--primary); outline: none; }
+.dropzone.dragging { border-color: var(--primary); background: var(--soft-2); }
+.dropzone.rect { width: 100%; height: 170px; border-radius: 12px; }
+.dropzone.circle { width: 120px; height: 120px; border-radius: 50%; }
+.dropzone.circle .dz-empty span, .dropzone.circle .dz-empty small { display: none; }
+.dropzone img { width: 100%; height: 100%; object-fit: cover; }
+.dz-empty { display: grid; gap: 4px; padding: 12px; font-size: 13px; }
+.dz-empty strong { color: var(--text); font-size: 14px; }
+.dz-empty small { font-size: 11px; }
+.dz-change {
+  position: absolute; bottom: 0; left: 0; right: 0; padding: 4px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 12px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.dropzone:hover .dz-change { opacity: 1; }
+.dz-remove {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px;
+  border: none; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff;
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+
+/* ---------- Avatar drop (profile photo) ---------- */
+.avatar-drop {
+  position: relative; display: inline-flex; flex-shrink: 0; cursor: pointer;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--soft); color: var(--primary);
+  align-items: center; justify-content: center;
+  outline: 2px dashed transparent; outline-offset: 4px;
+  transition: transform 0.2s, outline-color 0.2s;
+}
+.avatar-drop.dragging { transform: scale(1.12); outline-color: var(--primary); }
+.avatar-drop img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.avatar-letter { font-size: 26px; font-weight: 700; }
+.avatar-cam {
+  position: absolute; bottom: 0; right: 0; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--primary); border: 2px solid var(--surface);
+  display: flex; align-items: center; justify-content: center;
+}

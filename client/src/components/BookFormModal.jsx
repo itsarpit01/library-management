@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
+import DropZone from "./DropZone";
 import { useToast } from "../context/ToastContext";
 import { bookFormSchema } from "../schemas/bookSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
@@ -27,22 +28,11 @@ export default function BookFormModal({ book, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-
   const [coverFile, setCoverFile] = useState(null);
-  const [coverPreview, setCoverPreview] = useState(
-    isEdit && book.coverImage ? `${SERVER_URL}${book.coverImage}` : null
-  );
 
   const change = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setErrors((er) => ({ ...er, [e.target.name]: undefined }));
-  };
-
-  const handleCoverChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
   };
 
   const submit = async (e) => {
@@ -63,6 +53,7 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     const payload = { ...parsed.data };
     if (!payload.category) delete payload.category;
 
+    // text fields pehle, file aakhir mein
     const fd = new FormData();
     Object.entries(payload).forEach(([key, val]) => fd.append(key, val));
     if (coverFile) fd.append("coverImage", coverFile);
@@ -114,45 +105,12 @@ export default function BookFormModal({ book, onClose, onSaved }) {
         </div>
 
         <div className="field">
-          <label htmlFor="coverImage">Cover Image</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {coverPreview && (
-              <span style={{ position: "relative", display: "inline-block", flexShrink: 0 }}>
-                <img
-                  src={coverPreview}
-                  alt="cover"
-                  style={{ width: 56, height: 72, borderRadius: 6, objectFit: "cover" }}
-                />
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: -4,
-                    right: -4,
-                    background: "var(--primary, #5c6bc0)",
-                    borderRadius: "50%",
-                    width: 20,
-                    height: 20,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    border: "2px solid white",
-                  }}
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                </span>
-              </span>
-            )}
-            <input
-              id="coverImage"
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/webp"
-              onChange={handleCoverChange}
-            />
-          </div>
-          <span className="hint">Max 2MB. Formats: jpeg, png, webp</span>
+          <label>Cover image</label>
+          <DropZone
+            currentUrl={isEdit && book.coverImage ? `${SERVER_URL}${book.coverImage}` : null}
+            onFile={setCoverFile}
+            label="Drag and drop book cover"
+          />
         </div>
 
         <div className="modal-actions">

@@ -1,9 +1,27 @@
+import fs from "fs";
+import path from "path";
 import Book from "../models/Book.js";
 import Issue from "../models/Issue.js";
 import { bookQuerySchema } from "../validators/bookQueryValidator.js";
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+
+// Sirf uploads folder ke andar ki file delete hogi
+const removeFile = (relPath) => {
+  if (!relPath) return;
+  const full = path.resolve(process.cwd(), "." + relPath);
+  if (!full.startsWith(UPLOADS_DIR + path.sep)) return;
+  fs.unlink(full, () => {});
+};
+
+// Request fail ho to multer ki save ki hui nayi file hata do
+const discardUpload = (req) => {
+  if (req.file) fs.unlink(req.file.path, () => {});
+};
+
+// GET /api/books
 export const getBooks = async (req, res) => {
   const parsed = bookQuerySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -20,7 +38,6 @@ export const getBooks = async (req, res) => {
     const regex = new RegExp(escapeRegex(search), "i");
     filter.$or = [{ title: regex }, { author: regex }];
 
-   
     const isbnTerm = search.replace(/[-\s]/g, "");
     if (isbnTerm) {
       filter.$or.push({ isbn: new RegExp(escapeRegex(isbnTerm), "i") });
@@ -44,46 +61,53 @@ export const getBooks = async (req, res) => {
   });
 };
 
+// GET /api/books/:id
 export const getBookById = async (req, res) => {
   const book = await Book.findById(req.params.id);
   if (!book) return res.status(404).json({ message: "Book not found" });
   res.json(book);
 };
 
-
+// POST /api/books (librarian)
 export const createBook = async (req, res) => {
   const { isbn, totalCopies } = req.body;
 
   const exists = await Book.findOne({ isbn });
   if (exists) {
+    discardUpload(req);
     return res.status(409).json({ message: "Book with this ISBN already exists" });
   }
 
   const bookData = { ...req.body, availableCopies: totalCopies };
-
-  if (req.file) {
-    bookData.coverImage = `/uploads/books/${req.file.filename}`;
-  }
+  if (req.file) bookData.coverImage = `/uploads/books/${req.file.filename}`;
 
   const book = await Book.create(bookData);
   res.status(201).json(book);
 };
 
+// PUT /api/books/:id (librarian)
 export const updateBook = async (req, res) => {
   const book = await Book.findById(req.params.id);
-  if (!book) return res.status(404).json({ message: "Book not found" });
+  if (!book) {
+    discardUpload(req);
+    return res.status(404).json({ message: "Book not found" });
+  }
 
   const { totalCopies, isbn, ...rest } = req.body;
 
   if (isbn !== undefined && isbn !== book.isbn) {
     const dup = await Book.findOne({ isbn });
-    if (dup) return res.status(409).json({ message: "Book with this ISBN already exists" });
+    if (dup) {
+      discardUpload(req);
+      return res.status(409).json({ message: "Book with this ISBN already exists" });
+    }
     book.isbn = isbn;
   }
 
   if (totalCopies !== undefined) {
     const issuedCount = book.totalCopies - book.availableCopies;
     if (totalCopies < issuedCount) {
+      discardUpload(req);
       return res.status(400).json({
         message: `${issuedCount} copies are currently issued, total copies cannot be less than that`,
       });
@@ -95,6 +119,7 @@ export const updateBook = async (req, res) => {
   Object.assign(book, rest);
 
   if (req.file) {
+    removeFile(book.coverImage); // purani cover hatao
     book.coverImage = `/uploads/books/${req.file.filename}`;
   }
 
@@ -102,6 +127,7 @@ export const updateBook = async (req, res) => {
   res.json(updated);
 };
 
+// DELETE /api/books/:id (librarian)
 export const deleteBook = async (req, res) => {
   const activeIssues = await Issue.countDocuments({ book: req.params.id, status: "issued" });
   if (activeIssues > 0) {
@@ -112,5 +138,7 @@ export const deleteBook = async (req, res) => {
 
   const book = await Book.findByIdAndDelete(req.params.id);
   if (!book) return res.status(404).json({ message: "Book not found" });
+
+  removeFile(book.coverImage);
   res.json({ message: "Book deleted successfully" });
 };
