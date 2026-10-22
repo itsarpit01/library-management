@@ -17,6 +17,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const [books, setBooks] = useState([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [myRequests, setMyRequests] = useState([]);
+  const [myActiveIssues, setMyActiveIssues] = useState([]);
   const [form, setForm] = useState({
     bookId: request?.book || initial.bookId || "",
     quantity: request?.quantity ?? 1,
@@ -32,10 +33,18 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
 
     const load = async () => {
       try {
-        // Load user's existing requests to check for duplicate active requests
         if (!isEdit) {
-          const reqRes = await api.get("/purchase-requests/my");
-          if (!cancelled) setMyRequests(reqRes.data);
+          const [reqRes, issueRes] = await Promise.all([
+            api.get("/purchase-requests/my"),
+            api.get("/issues/my").catch(() => ({ data: [] })),
+          ]);
+          if (!cancelled) {
+            setMyRequests(reqRes.data);
+            const activeIssues = (Array.isArray(issueRes.data) ? issueRes.data : []).filter(
+              (i) => i.status === "issued"
+            );
+            setMyActiveIssues(activeIssues);
+          }
         }
 
         if (isLocked) {
@@ -66,13 +75,28 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
 
   const selected = books.find((b) => b._id === form.bookId);
 
-  // Check if user already has an active request for this selected book
+  // Check if book currently has an active block:
+  // 1. A pending or counter_offered request exists
+  // 2. An approved request exists AND the book is currently in "issued" status with the user
   const existingActiveRequest = !isEdit && form.bookId
-    ? myRequests.find(
-        (r) =>
-          (r.book === form.bookId || r.book?._id === form.bookId) &&
-          ["pending", "counter_offered", "approved"].includes(r.status)
-      )
+    ? myRequests.find((r) => {
+        const isThisBook = r.book === form.bookId || r.book?._id === form.bookId;
+        if (!isThisBook) return false;
+
+        // Pending or counter offer is actively in progress
+        if (["pending", "counter_offered"].includes(r.status)) return true;
+
+        // Approved request blocks ONLY IF the book is currently still issued (not yet returned)
+        if (r.status === "approved") {
+          const isCurrentlyIssued = myActiveIssues.some(
+            (i) => i.book?._id === form.bookId || i.book === form.bookId
+          );
+          return isCurrentlyIssued;
+        }
+
+        // Rejected or returned requests DO NOT block
+        return false;
+      })
     : null;
 
   const change = (e) => {
@@ -140,12 +164,14 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <strong style={{ color: "#ed6c02", fontSize: 14 }}>
-                Active request already exists!
+                Active request or issue exists!
               </strong>
               {statusBadge(existingActiveRequest.status)}
             </div>
             <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text, #333)" }}>
-              You already requested this book on <strong>{formatDate(existingActiveRequest.createdAt)}</strong> (Qty: {existingActiveRequest.quantity}).
+              {existingActiveRequest.status === "approved"
+                ? "This book is currently issued to you. You can request it again after returning it."
+                : `You already have an active request submitted on ${formatDate(existingActiveRequest.createdAt)}.`}
             </p>
             {existingActiveRequest.neededUntil && (
               <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text, #333)" }}>

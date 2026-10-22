@@ -30,7 +30,6 @@ export default function LibrarianRequests() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // State to automatically trigger IssueFormModal upon approval
   const [issueModalData, setIssueModalData] = useState(null);
 
   const load = useCallback(async () => {
@@ -94,13 +93,19 @@ export default function LibrarianRequests() {
       setSelected(null);
       load();
 
-      // If approved, automatically launch IssueFormModal with prefilled member, book & date
       if (status === "approved") {
         setIssueModalData({
           memberId: approvedReq.requestedBy?._id,
           member: approvedReq.requestedBy,
           bookId: approvedReq.book?._id || approvedReq.book,
+          book: {
+            _id: approvedReq.book?._id || approvedReq.book,
+            title: approvedReq.title,
+            author: approvedReq.author,
+          },
           dueDate: approvedReq.neededUntil,
+          requestId: approvedReq._id,
+          isLockedFromRequest: true, // ← Locks fields in IssueFormModal
         });
       }
     } catch (err) {
@@ -230,6 +235,13 @@ export default function LibrarianRequests() {
                 />
                 {noteError && <span className="error-text">{noteError}</span>}
               </div>
+
+              {selected.status === "counter_offered" && (
+                <p className="hint" style={{ color: "#ed6c02", marginBottom: 10 }}>
+                  ⚠️ Counter-offer is active. Waiting for member to accept or edit their request before issuing.
+                </p>
+              )}
+
               <div className="modal-actions" style={{ flexWrap: "wrap", gap: 8 }}>
                 <button className="btn btn-danger" onClick={() => review("rejected")} disabled={saving}>
                   <XIcon size={16} /> Reject
@@ -237,7 +249,12 @@ export default function LibrarianRequests() {
                 <button className="btn btn-soft" onClick={() => review("counter_offered")} disabled={saving}>
                   Propose Date
                 </button>
-                <button className="btn" onClick={() => review("approved")} disabled={saving}>
+                <button
+                  className="btn"
+                  onClick={() => review("approved")}
+                  disabled={saving || selected.status === "counter_offered"} // ← Point 3: Disabled when in counter_offered
+                  title={selected.status === "counter_offered" ? "Cannot issue while counter offer is pending user acceptance" : "Approve and issue"}
+                >
                   <CheckIcon size={16} /> Approve & Issue
                 </button>
               </div>
@@ -252,7 +269,6 @@ export default function LibrarianRequests() {
         </Modal>
       )}
 
-      {/* Automatically opens IssueFormModal when request is approved */}
       {issueModalData && (
         <IssueFormModal
           initial={issueModalData}

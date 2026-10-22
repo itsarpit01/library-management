@@ -1,12 +1,24 @@
 import Issue from "../models/Issue.js";
 import Book from "../models/Book.js";
+import PurchaseRequest from "../models/PurchaseRequest.js";
 import { calcFine, withOverdueInfo } from "../utils/fine.js";
 import { createIssue, reissueIssue, populateIssue } from "../services/issueService.js";
 
-// POST /api/issues (librarian) body: { bookId, memberId, dueDate }
+// POST /api/issues (librarian) body: { bookId, memberId, dueDate, requestId? }
 export const issueBook = async (req, res) => {
-  const { bookId, memberId, dueDate } = req.body;
+  const { bookId, memberId, dueDate, requestId } = req.body;
   const issue = await createIssue({ bookId, memberId, dueDate, issuedBy: req.user.id });
+
+  // Link request if requestId is provided or find matching approved request
+  if (requestId) {
+    await PurchaseRequest.findByIdAndUpdate(requestId, { issue: issue._id });
+  } else {
+    await PurchaseRequest.findOneAndUpdate(
+      { requestedBy: memberId, book: bookId, status: "approved", issue: { $exists: false } },
+      { issue: issue._id }
+    );
+  }
+
   res.status(201).json(withOverdueInfo(issue));
 };
 

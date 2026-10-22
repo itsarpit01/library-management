@@ -25,6 +25,7 @@ const purchaseRequestSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     reviewNote: { type: String, trim: true },
+    issue: { type: mongoose.Schema.Types.ObjectId, ref: "Issue" }, // ← NEW: linked issue
   },
   { timestamps: true }
 );
