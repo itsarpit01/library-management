@@ -47,7 +47,6 @@ export const requestReissue = async (req, res) => {
 export const reissue = async (req, res) => {
   const issue = await reissueIssue({ issueId: req.params.id, dueDate: req.body.dueDate });
   
-  // Reset reissueRequested flag upon successful reissue
   await Issue.findByIdAndUpdate(req.params.id, {
     reissueRequested: false,
     reissueRequestedDate: null,
@@ -56,9 +55,15 @@ export const reissue = async (req, res) => {
   res.json(withOverdueInfo(issue));
 };
 
-// PATCH /api/issues/:id/return (librarian)
+// PATCH /api/issues/:id/return (librarian ya purchaser apna)
 export const returnBook = async (req, res) => {
-  const issue = await Issue.findById(req.params.id);
+  const query = { _id: req.params.id };
+  // Agar purchaser hai toh sirf apni hi book return kar sake
+  if (req.user.role === "purchaser") {
+    query.member = req.user.id;
+  }
+
+  const issue = await Issue.findOne(query);
   if (!issue) return res.status(404).json({ message: "Issue record not found" });
   if (issue.status === "returned") {
     return res.status(400).json({ message: "Book already returned" });

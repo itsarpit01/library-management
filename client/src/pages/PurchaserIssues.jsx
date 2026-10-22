@@ -4,6 +4,8 @@ import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import ReissueModal from "../components/ReissueModal";
+import Modal from "../components/Modal";
+import { ReturnIcon } from "../components/Icons";
 
 const TABS = [
   { key: "", label: "All" },
@@ -18,6 +20,8 @@ export default function PurchaserIssues() {
   const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
   const [toReissue, setToReissue] = useState(null);
+  const [toReturn, setToReturn] = useState(null);
+  const [returning, setReturning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +45,22 @@ export default function PurchaserIssues() {
     if (tab === "returned") return i.status === "returned";
     return true;
   });
+
+  const confirmReturn = async () => {
+    setReturning(true);
+    try {
+      const res = await api.patch(`/issues/${toReturn._id}/return`);
+      const fine = res.data.fine ?? res.data.currentFine ?? 0;
+      toast.success(fine > 0 ? `Book returned. Late fine: ₹${fine}` : "Book returned successfully");
+      setToReturn(null);
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+      setToReturn(null);
+    } finally {
+      setReturning(false);
+    }
+  };
 
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
@@ -70,7 +90,7 @@ export default function PurchaserIssues() {
       <div className="page-head">
         <div>
           <h2>My Issues</h2>
-          <p>Books issued to you, due dates and fines. Ask the librarian for a reissue.</p>
+          <p>Books issued to you, due dates and fines. You can return or request a reissue.</p>
         </div>
       </div>
 
@@ -102,7 +122,7 @@ export default function PurchaserIssues() {
                 <th>Returned</th>
                 <th>Status</th>
                 <th>Fine</th>
-                <th></th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -124,16 +144,15 @@ export default function PurchaserIssues() {
                   <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
                   <td>
                     {i.status === "issued" && (
-                      <div>
-                        {i.reissueRequested ? (
-                          <span className="cell-sub" style={{ color: "#e65100" }}>
-                            Req: {formatDate(i.reissueRequestedDate)}
-                          </span>
-                        ) : (i.reissueCount || 0) < 2 ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {!i.reissueRequested && (i.reissueCount || 0) < 2 && (
                           <button className="btn btn-soft btn-sm" onClick={() => setToReissue(i)}>
-                            Request Reissue
+                            Reissue
                           </button>
-                        ) : null}
+                        )}
+                        <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
+                          <ReturnIcon size={16} /> Return
+                        </button>
                       </div>
                     )}
                   </td>
@@ -154,6 +173,27 @@ export default function PurchaserIssues() {
             load();
           }}
         />
+      )}
+
+      {toReturn && (
+        <Modal title="Return book" onClose={() => setToReturn(null)}>
+          <p>
+            Are you sure you want to return <strong>{toReturn.book?.title}</strong>?
+          </p>
+          {toReturn.currentFine > 0 && (
+            <p style={{ marginTop: 10 }}>
+              <span className="badge badge-danger">Late fine applicable: ₹{toReturn.currentFine}</span>
+            </p>
+          )}
+          <div className="modal-actions">
+            <button className="btn btn-soft" onClick={() => setToReturn(null)}>
+              Cancel
+            </button>
+            <button className="btn" onClick={confirmReturn} disabled={returning}>
+              {returning ? "Returning..." : "Confirm return"}
+            </button>
+          </div>
+        </Modal>
       )}
     </>
   );

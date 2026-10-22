@@ -18,7 +18,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
   const [form, setForm] = useState({
     memberId: initial.memberId || "",
     bookId: initial.bookId || "",
-    dueDate: initial.dueDate ? toDateInput(initial.dueDate) : dateInput(MAX_ISSUE_DAYS),
+    dueDate: initial.dueDate ? toDateInput(initial.dueDate) : dateInput(1), // ← Defaults to tomorrow
     requestId: initial.requestId || "",
   });
   const [errors, setErrors] = useState({});
@@ -26,7 +26,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (isLocked) return; // No need to load all lists if form is directly locked from a request
+    if (isLocked) return;
 
     api.get("/purchase-requests")
       .then((res) => {
@@ -65,7 +65,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
     const memberId = e.target.value;
     const memberReqs = requests.filter((r) => r.requestedBy?._id === memberId);
     let autoBookId = "";
-    let autoDueDate = dateInput(MAX_ISSUE_DAYS);
+    let autoDueDate = dateInput(1); // ← Defaults to tomorrow
     let autoRequestId = "";
 
     if (memberReqs.length === 1) {

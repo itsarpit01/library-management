@@ -150,8 +150,8 @@ export default function PurchaserRequests() {
                     {r.reviewedBy && <span className="cell-sub">by {r.reviewedBy.name}</span>}
                   </td>
                   <td>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {r.status === "counter_offered" && (
+                    {r.status === "counter_offered" ? (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button
                           className="btn btn-sm"
                           onClick={() => handleAcceptCounter(r)}
@@ -159,18 +159,27 @@ export default function PurchaserRequests() {
                         >
                           <CheckIcon size={16} /> {acceptingId === r._id ? "Accepting..." : "Accept Date"}
                         </button>
-                      )}
-                      {(r.status === "pending" || r.status === "counter_offered") && (
-                        <>
-                          <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
-                            <EditIcon size={16} /> Edit
-                          </button>
-                          <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
-                            <TrashIcon size={16} /> Cancel
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
+                          <EditIcon size={16} /> Edit
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
+                          <TrashIcon size={16} /> Cancel
+                        </button>
+                      </div>
+                    ) : r.status === "pending" ? (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
+                          <EditIcon size={16} /> Edit
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
+                          <TrashIcon size={16} /> Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="cell-sub" style={{ color: "var(--text-secondary, #888)" }}>
+                        {r.status === "approved" ? "Processed" : "Closed"}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

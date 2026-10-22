@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const MAX_ISSUE_DAYS = 15;
+export const MAX_ISSUE_DAYS = 7; // ← 7 days (1 week)
 export const MAX_REISSUES = 2;
 
 // "2026-10-30" -> us din ka 23:59:59 (due din par book overdue nahi maani jati)
@@ -19,7 +19,7 @@ const maxDue = () => {
   return d;
 };
 
-// Kal se lekar aaj+15 din tak. Server par bhi check, sirf frontend par nahi.
+// Kal se lekar aaj+7 din tak. Server par bhi check.
 export const dueDateSchema = z
   .string({ error: "Due date is required" })
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date")

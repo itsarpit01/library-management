@@ -19,7 +19,7 @@ const router = express.Router();
 
 router.use(protect);
 
-// Purchaser route
+// Purchaser routes
 router.get("/my", authorizeRoles("purchaser"), getMyIssues);
 router.patch(
   "/:id/request-reissue",
@@ -29,7 +29,14 @@ router.patch(
   requestReissue
 );
 
-// Librarian routes
+// Return route: Available to both Librarian & Purchaser (controller guards ownership)
+router.patch(
+  "/:id/return",
+  validate(issueIdParamSchema, "params"),
+  returnBook
+);
+
+// Librarian specific routes
 router.get("/", authorizeRoles("librarian"), getIssues);
 router.post("/", authorizeRoles("librarian"), validate(issueBookSchema), issueBook);
 router.patch(
@@ -38,12 +45,6 @@ router.patch(
   validate(issueIdParamSchema, "params"),
   validate(reissueSchema),
   reissue
-);
-router.patch(
-  "/:id/return",
-  authorizeRoles("librarian"),
-  validate(issueIdParamSchema, "params"),
-  returnBook
 );
 
 export default router;

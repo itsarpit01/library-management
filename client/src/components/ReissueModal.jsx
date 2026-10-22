@@ -9,8 +9,9 @@ import { dateInput, formatDate, toDateInput, MAX_ISSUE_DAYS } from "../utils/for
 // mode: "direct" (librarian) ya "request" (purchaser)
 export default function ReissueModal({ issue, mode, onClose, onSaved }) {
   const toast = useToast();
+  // Default to tomorrow (1 day after today), not max days
   const [dueDate, setDueDate] = useState(
-    issue.reissueRequestedDate ? toDateInput(issue.reissueRequestedDate) : dateInput(MAX_ISSUE_DAYS)
+    issue.reissueRequestedDate ? toDateInput(issue.reissueRequestedDate) : dateInput(1)
   );
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");

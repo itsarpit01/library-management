@@ -21,7 +21,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const [form, setForm] = useState({
     bookId: request?.book || initial.bookId || "",
     quantity: request?.quantity ?? 1,
-    neededUntil: request?.neededUntil ? toDateInput(request.neededUntil) : dateInput(MAX_ISSUE_DAYS),
+    neededUntil: request?.neededUntil ? toDateInput(request.neededUntil) : dateInput(1), // ← Defaults to tomorrow
     reason: request?.reason || "",
   });
   const [errors, setErrors] = useState({});
@@ -83,10 +83,8 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         const isThisBook = r.book === form.bookId || r.book?._id === form.bookId;
         if (!isThisBook) return false;
 
-        // Pending or counter offer is actively in progress
         if (["pending", "counter_offered"].includes(r.status)) return true;
 
-        // Approved request blocks ONLY IF the book is currently still issued (not yet returned)
         if (r.status === "approved") {
           const isCurrentlyIssued = myActiveIssues.some(
             (i) => i.book?._id === form.bookId || i.book === form.bookId
@@ -94,7 +92,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
           return isCurrentlyIssued;
         }
 
-        // Rejected or returned requests DO NOT block
         return false;
       })
     : null;
