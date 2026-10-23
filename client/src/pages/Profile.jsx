@@ -3,10 +3,10 @@ import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import PasswordInput from "../components/PasswordInput";
+import ImageCropModal from "../components/ImageCropModal";
 import { profileSchema, passwordFormSchema } from "../schemas/profileSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
-
 
 const SERVER_URL = "http://localhost:5000";
 const emptyPw = { currentPassword: "", newPassword: "", confirmPassword: "" };
@@ -23,6 +23,9 @@ export default function Profile() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  const [rawAvatarSrc, setRawAvatarSrc] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
 
   const [pw, setPw] = useState(emptyPw);
   const [pwErrors, setPwErrors] = useState({});
@@ -46,12 +49,18 @@ export default function Profile() {
       toast.error("Only image files (jpeg, jpg, png, webp) are allowed");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("File size must be under 2MB");
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5MB");
       return;
     }
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+    setRawAvatarSrc(URL.createObjectURL(file));
+    setShowCropper(true);
+  };
+
+  const handleCropComplete = (croppedFile) => {
+    setAvatarFile(croppedFile);
+    setAvatarPreview(URL.createObjectURL(croppedFile));
+    setShowCropper(false);
   };
 
   const handleAvatarChange = (e) => {
@@ -321,6 +330,16 @@ export default function Profile() {
           </div>
         </form>
       </div>
+
+      {showCropper && rawAvatarSrc && (
+        <ImageCropModal
+          imageSrc={rawAvatarSrc}
+          aspect={1}
+          title="Crop & Rotate Profile Avatar"
+          onClose={() => setShowCropper(false)}
+          onComplete={handleCropComplete}
+        />
+      )}
     </>
   );
 }

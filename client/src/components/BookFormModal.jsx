@@ -2,6 +2,7 @@ import { useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
 import DropZone from "./DropZone";
+import ImageCropModal from "./ImageCropModal";
 import { useToast } from "../context/ToastContext";
 import { bookFormSchema } from "../schemas/bookSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
@@ -28,11 +29,25 @@ export default function BookFormModal({ book, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+
   const [coverFile, setCoverFile] = useState(null);
+  const [rawImageSrc, setRawImageSrc] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
 
   const change = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setErrors((er) => ({ ...er, [e.target.name]: undefined }));
+  };
+
+  const handleFilePicked = (file) => {
+    if (!file) return;
+    setRawImageSrc(URL.createObjectURL(file));
+    setShowCropper(true);
+  };
+
+  const handleCropComplete = (croppedFile) => {
+    setCoverFile(croppedFile);
+    setShowCropper(false);
   };
 
   const submit = async (e) => {
@@ -53,7 +68,6 @@ export default function BookFormModal({ book, onClose, onSaved }) {
     const payload = { ...parsed.data };
     if (!payload.category) delete payload.category;
 
-    // text fields pehle, file aakhir mein
     const fd = new FormData();
     Object.entries(payload).forEach(([key, val]) => fd.append(key, val));
     if (coverFile) fd.append("coverImage", coverFile);
@@ -90,38 +104,56 @@ export default function BookFormModal({ book, onClose, onSaved }) {
   );
 
   return (
-    <Modal title={isEdit ? "Edit book" : "Add book"} onClose={onClose}>
-      <form onSubmit={submit} noValidate>
-        {formError && <div className="alert-error">{formError}</div>}
+    <>
+      <Modal title={isEdit ? "Edit book" : "Add book"} onClose={onClose}>
+        <form onSubmit={submit} noValidate>
+          {formError && <div className="alert-error">{formError}</div>}
 
-        {Field({ name: "title", label: "Title", required: true })}
-        {Field({ name: "author", label: "Author", required: true })}
-        {Field({ name: "isbn", label: "ISBN", hint: "10 or 13 digits, hyphens allowed", required: true })}
-        {Field({ name: "category", label: "Category" })}
+          {Field({ name: "title", label: "Title", required: true })}
+          {Field({ name: "author", label: "Author", required: true })}
+          {Field({ name: "isbn", label: "ISBN", hint: "10 or 13 digits, hyphens allowed", required: true })}
+          {Field({ name: "category", label: "Category" })}
 
-        <div className="form-row">
-          {Field({ name: "price", label: "Price (₹)", type: "number", min: 0, required: true })}
-          {Field({ name: "totalCopies", label: "Total copies", type: "number", min: 1, required: true })}
-        </div>
+          <div className="form-row">
+            {Field({ name: "price", label: "Price (₹)", type: "number", min: 0, required: true })}
+            {Field({ name: "totalCopies", label: "Total copies", type: "number", min: 1, required: true })}
+          </div>
 
-        <div className="field">
-          <label>Cover image</label>
-          <DropZone
-            currentUrl={isEdit && book.coverImage ? `${SERVER_URL}${book.coverImage}` : null}
-            onFile={setCoverFile}
-            label="Drag and drop book cover"
-          />
-        </div>
+          <div className="field">
+            <label>Cover image</label>
+            <DropZone
+              currentUrl={
+                coverFile
+                  ? URL.createObjectURL(coverFile)
+                  : isEdit && book.coverImage
+                  ? `${SERVER_URL}${book.coverImage}`
+                  : null
+              }
+              onFile={handleFilePicked}
+              label="Drag and drop book cover"
+            />
+          </div>
 
-        <div className="modal-actions">
-          <button type="button" className="btn btn-soft" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn" disabled={saving}>
-            {saving ? "Saving..." : isEdit ? "Save changes" : "Add book"}
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-soft" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={saving}>
+              {saving ? "Saving..." : isEdit ? "Save changes" : "Add book"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {showCropper && rawImageSrc && (
+        <ImageCropModal
+          imageSrc={rawImageSrc}
+          aspect={3 / 4}
+          title="Crop & Rotate Book Cover"
+          onClose={() => setShowCropper(false)}
+          onComplete={handleCropComplete}
+        />
+      )}
+    </>
   );
 }
