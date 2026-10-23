@@ -51,14 +51,33 @@ export default function LibrarianRequests() {
   const openReview = (r) => {
     setSelected(r);
     setNote(r.reviewNote || "");
-    setProposedDate(r.proposedDate ? toDateInput(r.proposedDate) : r.neededUntil ? toDateInput(r.neededUntil) : dateInput(3));
+    setProposedDate(
+      r.proposedDate
+        ? toDateInput(r.proposedDate)
+        : r.neededUntil
+        ? toDateInput(r.neededUntil)
+        : dateInput(1)
+    );
     setNoteError("");
     setFormError("");
   };
 
+  // Date matching check
+  const userNeededDate = selected?.neededUntil ? toDateInput(selected.neededUntil) : "";
+  const isDateMismatch = Boolean(selected && proposedDate && userNeededDate && proposedDate !== userNeededDate);
+  const isCounterOffered = selected?.status === "counter_offered";
+  
+  // Approve is ONLY allowed if: not currently saving, not in counter_offered state, AND dates match perfectly
+  const canApprove = !saving && !isCounterOffered && !isDateMismatch;
+
   const review = async (status) => {
     setNoteError("");
     setFormError("");
+
+    if (status === "approved" && isDateMismatch) {
+      setFormError("Dates do not match. Please propose the alternate date to the member first.");
+      return;
+    }
 
     if (reviewSchema) {
       const parsed = reviewSchema.safeParse({ reviewNote: note });
@@ -218,7 +237,14 @@ export default function LibrarianRequests() {
                   value={proposedDate}
                   onChange={(e) => setProposedDate(e.target.value)}
                 />
-                <span className="hint">If you select an earlier date, use "Propose Date" to negotiate with the user.</span>
+                <span className="hint">
+                  Member requested: <strong>{selected.neededUntil ? formatDate(selected.neededUntil) : "-"}</strong>.
+                  {isDateMismatch && (
+                    <span style={{ color: "#d97706", display: "block", marginTop: 4 }}>
+                       Date mismatch: Click <strong>"Propose Date"</strong> to negotiate with the user first.
+                    </span>
+                  )}
+                </span>
               </div>
 
               <div className="field">
@@ -236,9 +262,9 @@ export default function LibrarianRequests() {
                 {noteError && <span className="error-text">{noteError}</span>}
               </div>
 
-              {selected.status === "counter_offered" && (
+              {isCounterOffered && (
                 <p className="hint" style={{ color: "#ed6c02", marginBottom: 10 }}>
-                  ⚠️ Counter-offer is active. Waiting for member to accept or edit their request before issuing.
+                   Counter-offer is active. Waiting for member to accept or edit their request before issuing.
                 </p>
               )}
 
@@ -246,14 +272,25 @@ export default function LibrarianRequests() {
                 <button className="btn btn-danger" onClick={() => review("rejected")} disabled={saving}>
                   <XIcon size={16} /> Reject
                 </button>
-                <button className="btn btn-soft" onClick={() => review("counter_offered")} disabled={saving}>
+                <button
+                  className="btn btn-soft"
+                  onClick={() => review("counter_offered")}
+                  disabled={saving || !isDateMismatch}
+                  title={!isDateMismatch ? "Date matches requested date. Choose a different date to propose." : "Send counter offer with alternate date"}
+                >
                   Propose Date
                 </button>
                 <button
                   className="btn"
                   onClick={() => review("approved")}
-                  disabled={saving || selected.status === "counter_offered"} // ← Point 3: Disabled when in counter_offered
-                  title={selected.status === "counter_offered" ? "Cannot issue while counter offer is pending user acceptance" : "Approve and issue"}
+                  disabled={!canApprove}
+                  title={
+                    isCounterOffered
+                      ? "Cannot issue while counter offer is pending user acceptance"
+                      : isDateMismatch
+                      ? "Dates do not match. Propose alternate date to user first."
+                      : "Approve and issue"
+                  }
                 >
                   <CheckIcon size={16} /> Approve & Issue
                 </button>
