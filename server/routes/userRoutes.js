@@ -4,6 +4,7 @@ import {
   getMe,
   updateMe,
   changePassword,
+  upgradeMembership, // ← Added
 } from "../controllers/userController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -19,6 +20,7 @@ router.use(protect);
 router.get("/me", getMe);
 router.patch("/me", upload.single("avatar"), validate(updateProfileSchema), updateMe);
 router.patch("/me/password", passwordLimiter, validate(changePasswordSchema), changePassword);
+router.post("/upgrade-membership", upgradeMembership); // ← Added endpoint
 
 // Sirf librarian
 router.get("/members", authorizeRoles("librarian"), getMembers);

@@ -62,12 +62,75 @@ export default function LibrarianRequests() {
     setFormError("");
   };
 
+  // Helper to render member tier badge (Clean SVGs, No Emojis)
+  const renderTierBadge = (membership) => {
+    const tier = membership?.tier || "free";
+    if (tier === "ultimate") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          Ultimate
+        </span>
+      );
+    }
+    if (tier === "premium") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #6366f1, #4338ca)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          Premium
+        </span>
+      );
+    }
+    return (
+      <span
+        className="badge"
+        style={{
+          background: "var(--card-bg, #f3f4f6)",
+          color: "var(--text-secondary, #6b7280)",
+          fontSize: "0.72rem",
+          border: "1px solid var(--border, #d1d5db)",
+          padding: "2px 7px",
+        }}
+      >
+        Free
+      </span>
+    );
+  };
+
   // Date matching check
   const userNeededDate = selected?.neededUntil ? toDateInput(selected.neededUntil) : "";
   const isDateMismatch = Boolean(selected && proposedDate && userNeededDate && proposedDate !== userNeededDate);
   const isCounterOffered = selected?.status === "counter_offered";
   
-  // Approve is ONLY allowed if: not currently saving, not in counter_offered state, AND dates match perfectly
+  // Approve is ONLY allowed if: not saving, not in counter_offered state, AND dates match perfectly
   const canApprove = !saving && !isCounterOffered && !isDateMismatch;
 
   const review = async (status) => {
@@ -124,7 +187,7 @@ export default function LibrarianRequests() {
           },
           dueDate: approvedReq.neededUntil,
           requestId: approvedReq._id,
-          isLockedFromRequest: true, // ← Locks fields in IssueFormModal
+          isLockedFromRequest: true,
         });
       }
     } catch (err) {
@@ -185,7 +248,10 @@ export default function LibrarianRequests() {
                     <span className="cell-sub">{r.author}</span>
                   </td>
                   <td>
-                    {r.requestedBy?.name}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{r.requestedBy?.name}</span>
+                      {renderTierBadge(r.requestedBy?.membership)}
+                    </div>
                     <span className="cell-sub">{r.requestedBy?.email}</span>
                   </td>
                   <td>{r.quantity}</td>
@@ -218,7 +284,13 @@ export default function LibrarianRequests() {
             {selected.proposedDate && (
               <p><span>Proposed return date</span>{formatDate(selected.proposedDate)}</p>
             )}
-            <p><span>Requested by</span>{selected.requestedBy?.name}</p>
+            <p>
+              <span>Requested by</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {selected.requestedBy?.name}
+                {renderTierBadge(selected.requestedBy?.membership)}
+              </span>
+            </p>
             <p><span>Reason</span>{selected.reason || "-"}</p>
             <p><span>Status</span>{statusBadge(selected.status)}</p>
             {selected.status !== "pending" && selected.status !== "counter_offered" && (
@@ -241,7 +313,7 @@ export default function LibrarianRequests() {
                   Member requested: <strong>{selected.neededUntil ? formatDate(selected.neededUntil) : "-"}</strong>.
                   {isDateMismatch && (
                     <span style={{ color: "#d97706", display: "block", marginTop: 4 }}>
-                       Date mismatch: Click <strong>"Propose Date"</strong> to negotiate with the user first.
+                      Date mismatch: Click <strong>"Propose Date"</strong> to negotiate with the user first.
                     </span>
                   )}
                 </span>
@@ -264,7 +336,7 @@ export default function LibrarianRequests() {
 
               {isCounterOffered && (
                 <p className="hint" style={{ color: "#ed6c02", marginBottom: 10 }}>
-                   Counter-offer is active. Waiting for member to accept or edit their request before issuing.
+                  Counter-offer is active. Waiting for member to accept or edit their request before issuing.
                 </p>
               )}
 

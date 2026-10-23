@@ -11,6 +11,17 @@ const userSchema = new mongoose.Schema(
       default: "purchaser",
     },
     avatar: { type: String, default: "" },
+    membership: {
+      tier: {
+        type: String,
+        enum: ["free", "premium", "ultimate"],
+        default: "free",
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+    },
   },
   { timestamps: true }
 );
