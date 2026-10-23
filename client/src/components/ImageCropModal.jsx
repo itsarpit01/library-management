@@ -20,7 +20,7 @@ export default function ImageCropModal({
     setCroppedAreaPixels(areaPixels);
   };
 
-  const handleSave = async () => {
+  const handleApply = async () => {
     if (!croppedAreaPixels) return;
     setProcessing(true);
     try {
@@ -77,10 +77,10 @@ export default function ImageCropModal({
           <label style={{ minWidth: 60, fontSize: "0.9rem" }}>Rotate:</label>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-soft btn-sm" onClick={rotateLeft}>
-              ↺ -90°
+              -90°
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={rotateRight}>
-              ↻ +90°
+              +90°
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={() => { setRotation(0); setZoom(1); }}>
               Reset
@@ -93,8 +93,8 @@ export default function ImageCropModal({
         <button type="button" className="btn btn-soft" onClick={onClose} disabled={processing}>
           Cancel
         </button>
-        <button type="button" className="btn" onClick={handleSave} disabled={processing}>
-          {processing ? "Applying..." : "Apply & Save"}
+        <button type="button" className="btn" onClick={handleApply} disabled={processing}>
+          {processing ? "Applying..." : "Apply"}
         </button>
       </div>
     </Modal>

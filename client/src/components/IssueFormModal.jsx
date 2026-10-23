@@ -4,7 +4,8 @@ import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
 import { issueFormSchema } from "../schemas/issueSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
-import { dateInput, toDateInput, formatDate, MAX_ISSUE_DAYS } from "../utils/format";
+import { dateInput, toDateInput, formatDate } from "../utils/format";
+import { getEffectiveTier } from "../utils/membershipConfig";
 
 const toList = (data) => (Array.isArray(data) ? data : data?.data || []);
 
@@ -18,7 +19,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
   const [form, setForm] = useState({
     memberId: initial.memberId || "",
     bookId: initial.bookId || "",
-    dueDate: initial.dueDate ? toDateInput(initial.dueDate) : dateInput(1), // ← Defaults to tomorrow
+    dueDate: initial.dueDate ? toDateInput(initial.dueDate) : dateInput(1),
     requestId: initial.requestId || "",
   });
   const [errors, setErrors] = useState({});
@@ -50,6 +51,14 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
     }
   });
 
+  // Find currently selected member object
+  const currentMember = isLocked
+    ? initial.member
+    : requestedMembers.find((m) => m._id === form.memberId);
+
+  // Member's active tier
+  const memberTier = getEffectiveTier(currentMember);
+
   const eligibleBooks = requests
     .filter((r) => !form.memberId || r.requestedBy?._id === form.memberId)
     .map((r) => ({
@@ -65,7 +74,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
     const memberId = e.target.value;
     const memberReqs = requests.filter((r) => r.requestedBy?._id === memberId);
     let autoBookId = "";
-    let autoDueDate = dateInput(1); // ← Defaults to tomorrow
+    let autoDueDate = dateInput(1);
     let autoRequestId = "";
 
     if (memberReqs.length === 1) {
@@ -162,6 +171,45 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
           {errors.memberId && <span className="error-text">{errors.memberId}</span>}
         </div>
 
+        {/* Member Tier & Limit Justification Card for Librarian */}
+        {currentMember && (
+          <div
+            style={{
+              background: "rgba(92, 107, 192, 0.05)",
+              border: "1px solid var(--border, #e0e0e0)",
+              borderRadius: 8,
+              padding: "10px 12px",
+              marginBottom: 14,
+              fontSize: "0.82rem",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontWeight: 600, color: "var(--text, #333)" }}>Member Tier:</span>
+              <span
+                className="badge"
+                style={{
+                  background:
+                    memberTier.tier === "ultimate"
+                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                      : memberTier.tier === "premium"
+                      ? "linear-gradient(135deg, #6366f1, #4338ca)"
+                      : "#f3f4f6",
+                  color: memberTier.tier === "free" ? "#4b5563" : "#fff",
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  padding: "2px 8px",
+                }}
+              >
+                {memberTier.name} Member
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary, #666)" }}>
+              <span>Max Duration: <strong>{memberTier.maxIssueDays} days</strong></span>
+              <span>Allowed Books: <strong>{memberTier.maxBooks === Infinity ? "Unlimited" : `${memberTier.maxBooks} max`}</strong></span>
+            </div>
+          </div>
+        )}
+
         <div className="field">
           <label htmlFor="bookId">
             Book
@@ -205,7 +253,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
               name="dueDate"
               type="date"
               min={dateInput(1)}
-              max={dateInput(MAX_ISSUE_DAYS)}
+              max={dateInput(memberTier.maxIssueDays)}
               value={form.dueDate}
               onChange={change}
             />
@@ -215,7 +263,9 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
           ) : isLocked ? (
             <span className="hint">Pre-set from member's agreed request date.</span>
           ) : (
-            <span className="hint">Max {MAX_ISSUE_DAYS} days. After that the book must be reissued.</span>
+            <span className="hint">
+              Max {memberTier.maxIssueDays} days for {memberTier.name} membership.
+            </span>
           )}
         </div>
 

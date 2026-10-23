@@ -1,4 +1,3 @@
-import { useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
 import { useAuth } from "../context/AuthContext";
@@ -7,24 +6,14 @@ import { MEMBERSHIP_TIERS, getEffectiveTier } from "../utils/membershipConfig";
 import { formatDate } from "../utils/format";
 
 export default function MembershipModal({ onClose }) {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
-  const [upgrading, setUpgrading] = useState(false);
 
   const currentTier = getEffectiveTier(user);
 
-  const handleUpgrade = async (tierKey) => {
-    setUpgrading(true);
-    try {
-      const res = await api.post("/users/upgrade-membership", { tier: tierKey });
-      updateUser(res.data.user);
-      toast.success(res.data.message);
-      onClose();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to upgrade membership");
-    } finally {
-      setUpgrading(false);
-    }
+  // Locked until Payment Gateway is integrated in 2-3 days
+  const handleUpgrade = (tierName) => {
+    toast.info(`Payment gateway integration in progress! ${tierName} plan will be available for purchase in a few days.`);
   };
 
   return (
@@ -143,8 +132,7 @@ export default function MembershipModal({ onClose }) {
               ) : (
                 <button
                   className="btn"
-                  onClick={() => handleUpgrade(plan.tier)}
-                  disabled={upgrading}
+                  onClick={() => handleUpgrade(plan.name)}
                   style={{
                     width: "100%",
                     background:
@@ -155,7 +143,7 @@ export default function MembershipModal({ onClose }) {
                     fontWeight: 600,
                   }}
                 >
-                  {upgrading ? "Processing..." : `Upgrade to ${plan.name}`}
+                  Upgrade (Coming Soon)
                 </button>
               )}
             </div>

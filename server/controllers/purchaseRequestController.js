@@ -5,6 +5,9 @@ import Issue from "../models/Issue.js";
 import User from "../models/User.js";
 import { getUserTierConfig } from "../config/membershipConfig.js";
 
+// Automatically reset all users in database to Free tier (until payment gateway is integrated)
+User.updateMany({}, { $set: { membership: { tier: "free", expiresAt: null } } }).exec();
+
 const checkId = (id, res) => {
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ message: "Invalid request id" });
