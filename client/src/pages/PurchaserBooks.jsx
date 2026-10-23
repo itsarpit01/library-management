@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
@@ -18,7 +19,6 @@ export default function PurchaserBooks() {
   const [firstLoad, setFirstLoad] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
   const [available, setAvailable] = useState("");
   const [sort, setSort] = useState("title");
   const [page, setPage] = useState(1);
@@ -27,8 +27,6 @@ export default function PurchaserBooks() {
   const [requestFor, setRequestFor] = useState(null);
 
   const debouncedSearch = useDebounce(search);
-  const debouncedCategory = useDebounce(category);
-
   const requestId = useRef(0);
 
   const loadBooks = useCallback(async () => {
@@ -37,7 +35,6 @@ export default function PurchaserBooks() {
     try {
       const params = { sort, page, limit: LIMIT };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (debouncedCategory) params.category = debouncedCategory;
       if (available) params.available = available;
 
       const res = await api.get("/books", { params });
@@ -53,7 +50,7 @@ export default function PurchaserBooks() {
         setFirstLoad(false);
       }
     }
-  }, [debouncedSearch, debouncedCategory, available, sort, page, toast]);
+  }, [debouncedSearch, available, sort, page, toast]);
 
   useEffect(() => {
     loadBooks();
@@ -83,15 +80,6 @@ export default function PurchaserBooks() {
             }}
           />
         </div>
-        <input
-          className="toolbar-input"
-          placeholder="Category"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(1);
-          }}
-        />
         <select
           className="toolbar-input"
           value={available}
@@ -130,20 +118,25 @@ export default function PurchaserBooks() {
           className="book-grid"
           style={{ opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}
         >
-          {books.map((b) => (
-            <BookCard
-              key={b._id}
-              book={b}
-              actions={
-                <button
-                  className="btn btn-soft btn-sm"
-                  onClick={() => setRequestFor({ bookId: b._id })}
-                >
-                  <RequestIcon size={16} /> Request this book
-                </button>
-              }
-            />
-          ))}
+          {books.map((b) => {
+            const isAvailable = b.availableCopies > 0;
+            return (
+              <BookCard
+                key={b._id}
+                book={b}
+                actions={
+                  <button
+                    className="btn btn-soft btn-sm"
+                    onClick={() => setRequestFor({ bookId: b._id })}
+                    disabled={!isAvailable}
+                    title={!isAvailable ? "This book is currently out of stock" : "Request this book"}
+                  >
+                    <RequestIcon size={16} /> {isAvailable ? "Request this book" : "Out of stock"}
+                  </button>
+                }
+              />
+            );
+          })}
         </div>
       )}
 

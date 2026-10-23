@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
@@ -19,7 +20,6 @@ export default function LibrarianBooks() {
   const [firstLoad, setFirstLoad] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
   const [available, setAvailable] = useState("");
   const [sort, setSort] = useState("-createdAt");
   const [page, setPage] = useState(1);
@@ -29,7 +29,6 @@ export default function LibrarianBooks() {
   const [deleting, setDeleting] = useState(false);
 
   const debouncedSearch = useDebounce(search);
-  const debouncedCategory = useDebounce(category);
 
   // Sirf sabse latest request ka response use hoga
   const requestId = useRef(0);
@@ -40,7 +39,6 @@ export default function LibrarianBooks() {
     try {
       const params = { sort, page, limit: LIMIT };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (debouncedCategory) params.category = debouncedCategory;
       if (available) params.available = available;
 
       const res = await api.get("/books", { params });
@@ -56,7 +54,7 @@ export default function LibrarianBooks() {
         setFirstLoad(false);
       }
     }
-  }, [debouncedSearch, debouncedCategory, available, sort, page, toast]);
+  }, [debouncedSearch, available, sort, page, toast]);
 
   useEffect(() => {
     loadBooks();
@@ -108,15 +106,6 @@ export default function LibrarianBooks() {
             }}
           />
         </div>
-        <input
-          className="toolbar-input"
-          placeholder="Category"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(1);
-          }}
-        />
         <select
           className="toolbar-input"
           value={available}
