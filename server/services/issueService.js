@@ -2,6 +2,7 @@ import Issue from "../models/Issue.js";
 import Book from "../models/Book.js";
 import User from "../models/User.js";
 import { MAX_REISSUES } from "../utils/dates.js";
+import { getUserTierConfig } from "../config/membershipConfig.js";
 
 export const httpError = (statusCode, message) =>
   Object.assign(new Error(message), { statusCode });
@@ -9,13 +10,25 @@ export const httpError = (statusCode, message) =>
 export const populateIssue = (query) =>
   query
     .populate("book", "title author isbn")
-    .populate("member", "name email")
+    .populate("member", "name email membership") // ← Added membership here
     .populate("issuedBy", "name");
 
 // Librarian ka seedha issue aur borrow request approve, dono yahi use karte hain
 export async function createIssue({ bookId, memberId, dueDate, issuedBy }) {
   const member = await User.findById(memberId);
   if (!member || member.role !== "purchaser") throw httpError(404, "Member not found");
+
+  // GATE: Check member's active tier borrowing limit
+  const tierConfig = getUserTierConfig(member);
+  if (tierConfig.maxBooks !== Infinity) {
+    const activeCount = await Issue.countDocuments({ member: memberId, status: "issued" });
+    if (activeCount >= tierConfig.maxBooks) {
+      throw httpError(
+        400,
+        `Limit reached: Member's ${tierConfig.name} plan allows a maximum of ${tierConfig.maxBooks} active issued books`
+      );
+    }
+  }
 
   const already = await Issue.findOne({ book: bookId, member: memberId, status: "issued" });
   if (already) throw httpError(400, "This member already has this book issued");

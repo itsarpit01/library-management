@@ -70,6 +70,69 @@ export default function LibrarianIssues() {
     }
   };
 
+  // Helper to render member tier badge (Clean SVGs, No Emojis)
+  const renderTierBadge = (membership) => {
+    const tier = membership?.tier || "free";
+    if (tier === "ultimate") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          Ultimate
+        </span>
+      );
+    }
+    if (tier === "premium") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #6366f1, #4338ca)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          Premium
+        </span>
+      );
+    }
+    return (
+      <span
+        className="badge"
+        style={{
+          background: "var(--card-bg, #f3f4f6)",
+          color: "var(--text-secondary, #6b7280)",
+          fontSize: "0.72rem",
+          border: "1px solid var(--border, #d1d5db)",
+          padding: "2px 7px",
+        }}
+      >
+        Free
+      </span>
+    );
+  };
+
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
     if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
@@ -145,7 +208,10 @@ export default function LibrarianIssues() {
                     <span className="cell-sub">{i.book?.author}</span>
                   </td>
                   <td>
-                    {i.member?.name}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{i.member?.name}</span>
+                      {renderTierBadge(i.member?.membership)}
+                    </div>
                     <span className="cell-sub">{i.member?.email}</span>
                   </td>
                   <td>{formatDate(i.issueDate)}</td>
@@ -195,7 +261,8 @@ export default function LibrarianIssues() {
       {toReturn && (
         <Modal title="Return book" onClose={() => setToReturn(null)}>
           <p>
-            Mark <strong>{toReturn.book?.title}</strong> as returned by <strong>{toReturn.member?.name}</strong>?
+            Mark <strong>{toReturn.book?.title}</strong> as returned by{" "}
+            <strong>{toReturn.member?.name}</strong> {renderTierBadge(toReturn.member?.membership)}?
           </p>
           {toReturn.currentFine > 0 && (
             <p style={{ marginTop: 10 }}>
