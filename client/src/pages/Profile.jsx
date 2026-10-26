@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -30,7 +29,10 @@ export default function Profile() {
   const [rawAvatarSrc, setRawAvatarSrc] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
+
+  // Active slots counts
   const [activeBooksCount, setActiveBooksCount] = useState(0);
+  const [activeRequestsCount, setActiveRequestsCount] = useState(0);
 
   const [pw, setPw] = useState(emptyPw);
   const [pwErrors, setPwErrors] = useState({});
@@ -40,18 +42,25 @@ export default function Profile() {
   const tier = getEffectiveTier(user);
 
   useEffect(() => {
-    // Load profile info and current active issues count
+    // Load profile, active issued books, aur pending/counter_offered requests
     Promise.all([
       api.get("/users/me"),
       api.get("/issues/my").catch(() => ({ data: [] })),
+      api.get("/purchase-requests/my").catch(() => ({ data: [] })),
     ])
-      .then(([userRes, issueRes]) => {
+      .then(([userRes, issueRes, reqRes]) => {
         setProfile(userRes.data);
         setName(userRes.data.name);
 
         const issues = Array.isArray(issueRes.data) ? issueRes.data : [];
-        const active = issues.filter((i) => i.status === "issued").length;
-        setActiveBooksCount(active);
+        const activeIssues = issues.filter((i) => i.status === "issued").length;
+        setActiveBooksCount(activeIssues);
+
+        const requests = Array.isArray(reqRes.data) ? reqRes.data : [];
+        const activeReqs = requests.filter((r) =>
+          ["pending", "counter_offered"].includes(r.status)
+        ).length;
+        setActiveRequestsCount(activeReqs);
       })
       .catch((err) => toast.error(getErrorMessage(err)));
   }, [toast]);
@@ -123,55 +132,66 @@ export default function Profile() {
 
     setSavingName(true);
     try {
-      const fd = new FormData();
-      fd.append("name", parsed.data.name);
-      if (avatarFile) fd.append("avatar", avatarFile);
+      let res;
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("name", name.trim());
+        formData.append("avatar", avatarFile);
+        res = await api.put("/users/profile", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        res = await api.put("/users/profile", { name: name.trim() });
+      }
 
-      const { data } = await api.patch("/users/me", fd);
-      updateUser({ name: data.user.name, avatar: data.user.avatar });
-      setProfile((p) => ({ ...p, name: data.user.name, avatar: data.user.avatar }));
-      setName(data.user.name);
+      setProfile(res.data);
+      updateUser(res.data);
       setAvatarFile(null);
-      setAvatarPreview(null);
       toast.success("Profile updated");
     } catch (err) {
       const fe = getFieldErrors(err);
-      setNameError(fe.name || getErrorMessage(err));
+      if (fe.name) setNameError(fe.name);
+      else toast.error(getErrorMessage(err));
     } finally {
       setSavingName(false);
     }
   };
 
   const changePw = (e) => {
-    setPw((p) => ({ ...p, [e.target.name]: e.target.value }));
-    setPwErrors((er) => ({ ...er, [e.target.name]: undefined }));
+    const { name: field, value } = e.target;
+    setPw((p) => ({ ...p, [field]: value }));
+    setPwErrors((pe) => ({ ...pe, [field]: undefined }));
   };
 
-  const savePassword = async (e) => {
+  const savePw = async (e) => {
     e.preventDefault();
     setPwFormError("");
+    setPwErrors({});
 
     const parsed = passwordFormSchema.safeParse(pw);
     if (!parsed.success) {
-      const fe = {};
-      parsed.error.issues.forEach((i) => {
-        if (!fe[i.path[0]]) fe[i.path[0]] = i.message;
+      const fieldErrors = {};
+      parsed.error.issues.forEach((issue) => {
+        const fieldName = issue.path[0];
+        if (!fieldErrors[fieldName]) {
+          fieldErrors[fieldName] = issue.message;
+        }
       });
-      setPwErrors(fe);
+      setPwErrors(fieldErrors);
       return;
     }
 
     setSavingPw(true);
     try {
-      await api.patch("/users/me/password", {
+      await api.put("/users/password", {
         currentPassword: pw.currentPassword,
         newPassword: pw.newPassword,
       });
-      toast.success("Password changed");
+      toast.success("Password updated");
       setPw(emptyPw);
     } catch (err) {
       const fe = getFieldErrors(err);
-      if (Object.keys(fe).length) setPwErrors(fe);
+      if (fe.currentPassword || fe.newPassword) setPwErrors(fe);
       else setPwFormError(getErrorMessage(err));
     } finally {
       setSavingPw(false);
@@ -181,11 +201,15 @@ export default function Profile() {
   const avatarSrc = avatarPreview || (profile?.avatar ? `${SERVER_URL}${profile.avatar}` : null);
   const unchanged = name.trim() === (profile?.name ?? user?.name) && !avatarFile;
 
-  // Percentage used for progress bar
+  // Active Capacity Math
+  const totalActiveSlots = activeBooksCount + activeRequestsCount;
+  const remainingSlots =
+    tier.maxBooks === Infinity ? Infinity : Math.max(0, tier.maxBooks - totalActiveSlots);
+
   const usagePercentage =
     tier.maxBooks === Infinity
       ? 10
-      : Math.min(100, Math.round((activeBooksCount / tier.maxBooks) * 100));
+      : Math.min(100, Math.round((totalActiveSlots / tier.maxBooks) * 100));
 
   return (
     <>
@@ -249,39 +273,49 @@ export default function Profile() {
                       bottom: 0,
                       right: 0,
                       background: "var(--primary, #5c6bc0)",
+                      color: "#fff",
                       borderRadius: "50%",
                       width: 22,
                       height: 22,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      border: "2px solid white",
+                      fontSize: 12,
+                      border: "2px solid #fff",
                     }}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                      <circle cx="12" cy="13" r="4" />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </svg>
                   </span>
                 </div>
-                <input
-                  id="avatarInput"
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={handleAvatarChange}
-                  hidden
-                />
               </label>
+              <input
+                id="avatarInput"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleAvatarChange}
+                style={{ display: "none" }}
+              />
               <div>
-                <h3 style={{ margin: 0 }}>{profile?.name || user?.name}</h3>
-                <span className="badge" style={{ textTransform: "capitalize" }}>
+                <h3 style={{ margin: 0 }}>{profile?.name ?? user?.name}</h3>
+                <span className="cell-sub">{profile?.email ?? user?.email}</span>
+                <span
+                  className="badge"
+                  style={{
+                    marginTop: 4,
+                    display: "inline-block",
+                    textTransform: "capitalize",
+                  }}
+                >
                   {user?.role}
                 </span>
               </div>
             </div>
 
-            <div className="field">
-              <label htmlFor="name">Name</label>
+            <div className="field" style={{ marginTop: 14 }}>
+              <label htmlFor="name">Full name</label>
               <input
                 id="name"
                 value={name}
@@ -312,14 +346,13 @@ export default function Profile() {
           </div>
         </form>
 
-        {/* Card 2: Rich Comprehensive Membership Card */}
+        {/* Card 2: Membership Capacity & Status Card */}
         {user.role === "purchaser" && (
           <div
             className="card"
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
             <div style={{ flex: 1 }}>
-              {/* Header with Title and Tier Badge */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <h3 style={{ margin: 0 }}>My Membership</h3>
                 <span
@@ -346,12 +379,12 @@ export default function Profile() {
                 <span>Active Account • {tier.tier === "free" ? "Free Lifetime Access" : "Active Subscription"}</span>
               </div>
 
-              {/* Live Borrowing Capacity with Progress Bar */}
+              {/* Live Borrowing & Request Capacity Meter */}
               <div style={{ background: "rgba(92, 107, 192, 0.05)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", fontWeight: 600, marginBottom: 6 }}>
-                  <span>Borrowing Capacity</span>
-                  <span style={{ color: activeBooksCount >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "var(--primary, #5c6bc0)" }}>
-                    {activeBooksCount} / {tier.maxBooks === Infinity ? "Unlimited" : `${tier.maxBooks} books`}
+                  <span>Active Capacity</span>
+                  <span style={{ color: totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "var(--primary, #5c6bc0)" }}>
+                    {totalActiveSlots} / {tier.maxBooks === Infinity ? "Unlimited" : `${tier.maxBooks} slots`}
                   </span>
                 </div>
                 <div style={{ width: "100%", height: 7, background: "rgba(0,0,0,0.08)", borderRadius: 4, overflow: "hidden" }}>
@@ -360,7 +393,7 @@ export default function Profile() {
                       height: "100%",
                       width: `${usagePercentage}%`,
                       background:
-                        activeBooksCount >= tier.maxBooks && tier.maxBooks !== Infinity
+                        totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity
                           ? "#ef4444"
                           : "var(--primary, #5c6bc0)",
                       borderRadius: 4,
@@ -368,11 +401,14 @@ export default function Profile() {
                     }}
                   />
                 </div>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)", display: "block", marginTop: 4 }}>
-                  {tier.maxBooks === Infinity
-                    ? "Unlimited active loans allowed"
-                    : `${Math.max(0, tier.maxBooks - activeBooksCount)} borrowing slot(s) available`}
-                </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-secondary, #666)", marginTop: 6 }}>
+                  <span>{activeBooksCount} issued • {activeRequestsCount} pending</span>
+                  <strong style={{ color: totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "#16a34a" }}>
+                    {tier.maxBooks === Infinity
+                      ? "Unlimited remaining"
+                      : `${remainingSlots} request slot(s) left`}
+                  </strong>
+                </div>
               </div>
 
               {/* Key Limits */}
@@ -382,7 +418,10 @@ export default function Profile() {
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
-                  <span><strong>Reading Window:</strong> Up to {tier.maxIssueDays} days per issue</span>
+                  <span>
+                    <strong>Reading Window:</strong>{" "}
+                    {tier.tier === "ultimate" ? "All upcoming dates open" : `Up to ${tier.maxIssueDays} days`}
+                  </span>
                 </div>
                 {user?.membership?.expiresAt && tier.tier !== "free" && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#d97706" }}>
@@ -392,103 +431,76 @@ export default function Profile() {
                       <line x1="8" y1="2" x2="8" y2="6" />
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
-                    <span><strong>Subscription Renews:</strong> {formatDate(user.membership.expiresAt)}</span>
+                    <span><strong>Expires:</strong> {formatDate(user.membership.expiresAt)}</span>
                   </div>
                 )}
               </div>
 
-              {/* What's Included / Locked Checklist */}
-              <div style={{ borderTop: "1px solid var(--border, #eee)", paddingTop: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: "0.76rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-secondary, #888)", letterSpacing: "0.5px", display: "block", marginBottom: 8 }}>
-                  Plan Privileges
-                </span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: "0.82rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--success, #16a34a)" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              {/* Plan Benefits Checklist */}
+              <div style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6, fontSize: "0.8rem", color: "var(--text-secondary, #666)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#16a34a" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Catalog browsing & book searches</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#16a34a" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Return & reissue request tracking</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: tier.tier !== "free" ? "#16a34a" : "#9ca3af" }}>
+                  {tier.tier !== "free" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span>Standard library catalog access</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--success, #16a34a)" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    <span>Self-return & reissue request workflow</span>
-                  </div>
-                  {tier.tier === "free" ? (
-                    <>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9ca3af" }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                        <span>Priority approval queue (Premium)</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9ca3af" }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                        <span>60-day reading duration (Ultimate)</span>
-                      </div>
-                    </>
                   ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--success, #16a34a)" }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <span>Priority review & extended limits enabled</span>
-                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
                   )}
+                  <span>10 active books capacity (Premium)</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: tier.tier === "ultimate" ? "#16a34a" : "#9ca3af" }}>
+                  {tier.tier === "ultimate" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  )}
+                  <span>Unlimited books & upcoming dates (Ultimate)</span>
                 </div>
               </div>
-
-              {/* Upgrade Promo Callout (for Free users) */}
-              {tier.tier === "free" && (
-                <div style={{ background: "rgba(124, 58, 237, 0.06)", border: "1px dashed #c4b5fd", borderRadius: 8, padding: "8px 10px", fontSize: "0.78rem", color: "#6d28d9" }}>
-                  Need more capacity? Upgrade to <strong>Premium</strong> for 10 books or <strong>Ultimate</strong> for unlimited reading.
-                </div>
-              )}
             </div>
 
-            {/* Bottom Pinned Upgrade Button */}
             <div className="modal-actions" style={{ marginTop: "auto", paddingTop: 16 }}>
               <button
                 type="button"
-                className="btn"
+                className="btn btn-soft"
                 onClick={() => setShowMembershipModal(true)}
-                style={{
-                  width: "100%",
-                  background:
-                    tier.tier === "free"
-                      ? "linear-gradient(135deg, #7c3aed, #5b21b6)"
-                      : "var(--primary, #5c6bc0)",
-                  color: "#fff",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
+                style={{ width: "100%" }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span>{tier.tier === "free" ? "Upgrade Membership" : "Change / Extend Plan"}</span>
+                View Plans & Upgrade
               </button>
             </div>
           </div>
         )}
 
-        {/* Card 3: Password Change Form */}
+        {/* Card 3: Change Password */}
         <form
           className="card"
-          onSubmit={savePassword}
+          onSubmit={savePw}
           noValidate
           style={{ display: "flex", flexDirection: "column", height: "100%" }}
         >
           <div style={{ flex: 1 }}>
-            <h3>Change password</h3>
+            <h3 style={{ marginTop: 0 }}>Change Password</h3>
             {pwFormError && <div className="alert-error">{pwFormError}</div>}
 
             <div className="field">
@@ -498,10 +510,8 @@ export default function Profile() {
                 name="currentPassword"
                 value={pw.currentPassword}
                 onChange={changePw}
+                error={pwErrors.currentPassword}
               />
-              {pwErrors.currentPassword && (
-                <span className="error-text">{pwErrors.currentPassword}</span>
-              )}
             </div>
 
             <div className="field">
@@ -511,14 +521,8 @@ export default function Profile() {
                 name="newPassword"
                 value={pw.newPassword}
                 onChange={changePw}
+                error={pwErrors.newPassword}
               />
-              {pwErrors.newPassword ? (
-                <span className="error-text">{pwErrors.newPassword}</span>
-              ) : (
-                <span className="hint">
-                  Min 8 characters with capital, small letter, number and special character.
-                </span>
-              )}
             </div>
 
             <div className="field">
@@ -528,15 +532,17 @@ export default function Profile() {
                 name="confirmPassword"
                 value={pw.confirmPassword}
                 onChange={changePw}
+                error={pwErrors.confirmPassword}
               />
-              {pwErrors.confirmPassword && (
-                <span className="error-text">{pwErrors.confirmPassword}</span>
-              )}
             </div>
           </div>
 
           <div className="modal-actions" style={{ marginTop: "auto", paddingTop: 16 }}>
-            <button type="submit" className="btn" disabled={savingPw}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={savingPw || !pw.currentPassword || !pw.newPassword}
+            >
               {savingPw ? "Updating..." : "Update password"}
             </button>
           </div>
@@ -546,10 +552,9 @@ export default function Profile() {
       {showCropper && rawAvatarSrc && (
         <ImageCropModal
           imageSrc={rawAvatarSrc}
-          aspect={1}
-          title="Crop & Rotate Profile Avatar"
+          aspectRatio={1}
+          onCropComplete={handleCropComplete}
           onClose={() => setShowCropper(false)}
-          onComplete={handleCropComplete}
         />
       )}
 

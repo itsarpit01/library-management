@@ -40,20 +40,29 @@ export const createRequest = async (req, res) => {
 
   const tierConfig = getUserTierConfig(user);
 
-  // GATE 1: active issued books limit (Issue mein field "member" hai)
+  // GATE 1: Active slots limit check (Active Requests + Currently Issued Books)
   if (tierConfig.maxBooks !== Infinity) {
-    const activeIssuesCount = await Issue.countDocuments({
-      member: req.user.id,
-      status: "issued",
-    });
-    if (activeIssuesCount >= tierConfig.maxBooks) {
+    const [activeRequestsCount, activeIssuesCount] = await Promise.all([
+      PurchaseRequest.countDocuments({
+        requestedBy: req.user.id,
+        status: { $in: ["pending", "counter_offered"] },
+      }),
+      Issue.countDocuments({
+        member: req.user.id,
+        status: "issued",
+      }),
+    ]);
+
+    const totalActiveUsed = activeRequestsCount + activeIssuesCount;
+
+    if (totalActiveUsed >= tierConfig.maxBooks) {
       return res.status(400).json({
-        message: `Limit reached: Your ${tierConfig.name} plan allows a maximum of ${tierConfig.maxBooks} active issued books. Please return a book or upgrade your membership.`,
+        message: `Limit reached: You have ${totalActiveUsed} active requests/books (Max ${tierConfig.maxBooks} on ${tierConfig.name} plan). Return an issued book, wait for pending requests to be reviewed/cancelled, or upgrade your plan.`,
       });
     }
   }
 
-  // GATE 2: plan ke hisaab se max din
+  // GATE 2: Plan ke anusaar calendar days validation
   assertDueWithinTier(neededUntil, tierConfig);
 
   if (quantity > book.totalCopies) return quantityCapError(res, book.totalCopies);
@@ -141,7 +150,7 @@ export const acceptCounterOffer = async (req, res) => {
 
   existing.neededUntil = existing.proposedDate;
   existing.proposedDate = null;
-  existing.status = "pending"; // ab dono dates same, librarian approve kar sakta hai
+  existing.status = "pending"; // ab dono dates match ho gayi, librarian approve kar sakta hai
   existing.reviewNote = existing.reviewNote
     ? `${existing.reviewNote} (Accepted proposed date by user)`
     : "Accepted proposed date by user";
@@ -150,7 +159,7 @@ export const acceptCounterOffer = async (req, res) => {
   res.json(existing);
 };
 
-// DELETE /api/purchase-requests/:id (purchaser, pending ya counter_offered)
+// DELETE /api/purchase-requests/:id (purchaser, pending ya counter_offered cancel karega toh slot wapas mil jayegi)
 export const cancelRequest = async (req, res) => {
   if (!checkId(req.params.id, res)) return;
 
@@ -189,7 +198,7 @@ export const reviewRequest = async (req, res) => {
     return res.status(409).json({ message: "Request already reviewed" });
   }
 
-  // Counter ke dauran approve nahi: pehle purchaser accept kare ya librarian naya counter/reject de
+  // Counter offer ke dauran direct approve nahi
   if (status === "approved" && existing.status === "counter_offered") {
     throw httpError(409, "Waiting for the member to respond to your counter offer");
   }
@@ -203,7 +212,7 @@ export const reviewRequest = async (req, res) => {
 
   if (status === "counter_offered") {
     const proposed = new Date(req.body.proposedDate);
-    proposed.setHours(23, 59, 59, 0); // din ka aakhri second
+    proposed.setHours(23, 59, 59, 0);
 
     if (proposed <= endOfToday()) {
       throw httpError(400, "Proposed date must be from tomorrow onwards");
@@ -221,7 +230,7 @@ export const reviewRequest = async (req, res) => {
   }
 
   const updated = await PurchaseRequest.findOneAndUpdate(
-    { _id: existing._id, status: existing.status }, // beech mein badla ho to fail
+    { _id: existing._id, status: existing.status },
     update,
     { new: true }
   );
