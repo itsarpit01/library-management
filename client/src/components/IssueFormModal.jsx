@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
 import { useToast } from "../context/ToastContext";
-import { issueFormSchema } from "../schemas/issueSchema";
+import { makeIssueFormSchema } from "../schemas/issueSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { dateInput, toDateInput, formatDate } from "../utils/format";
 import { getEffectiveTier } from "../utils/membershipConfig";
@@ -29,11 +29,15 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
   useEffect(() => {
     if (isLocked) return;
 
-    api.get("/purchase-requests")
+    api
+      .get("/purchase-requests")
       .then((res) => {
         const allRequests = toList(res.data);
-        const activeRequests = allRequests.filter((r) =>
-          ["pending", "approved", "counter_offered"].includes(r.status) && r.requestedBy && (r.book || r._id)
+        const activeRequests = allRequests.filter(
+          (r) =>
+            ["pending", "approved", "counter_offered"].includes(r.status) &&
+            r.requestedBy &&
+            (r.book || r._id)
         );
         setRequests(activeRequests);
       })
@@ -51,12 +55,11 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
     }
   });
 
-  // Find currently selected member object
   const currentMember = isLocked
     ? initial.member
     : requestedMembers.find((m) => m._id === form.memberId);
 
-  // Member's active tier
+  // Calendar aur validation member ke plan se
   const memberTier = getEffectiveTier(currentMember);
 
   const eligibleBooks = requests
@@ -85,19 +88,16 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
       }
     }
 
-    setForm({
-      memberId,
-      bookId: autoBookId,
-      dueDate: autoDueDate,
-      requestId: autoRequestId,
-    });
-    setErrors((er) => ({ ...er, memberId: undefined, bookId: undefined }));
+    setForm({ memberId, bookId: autoBookId, dueDate: autoDueDate, requestId: autoRequestId });
+    setErrors((er) => ({ ...er, memberId: undefined, bookId: undefined, dueDate: undefined }));
   };
 
   const handleBookChange = (e) => {
     const bookId = e.target.value;
     const matchedReq = requests.find(
-      (r) => (!form.memberId || r.requestedBy?._id === form.memberId) && (r.book?._id === bookId || r.book === bookId)
+      (r) =>
+        (!form.memberId || r.requestedBy?._id === form.memberId) &&
+        (r.book?._id === bookId || r.book === bookId)
     );
 
     setForm((f) => ({
@@ -106,7 +106,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
       requestId: matchedReq?._id || "",
       dueDate: matchedReq?.neededUntil ? toDateInput(matchedReq.neededUntil) : f.dueDate,
     }));
-    setErrors((er) => ({ ...er, bookId: undefined }));
+    setErrors((er) => ({ ...er, bookId: undefined, dueDate: undefined }));
   };
 
   const change = (e) => {
@@ -118,7 +118,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
     e.preventDefault();
     setFormError("");
 
-    const parsed = issueFormSchema.safeParse(form);
+    const parsed = makeIssueFormSchema(memberTier.maxIssueDays).safeParse(form);
     if (!parsed.success) {
       const fe = {};
       parsed.error.issues.forEach((i) => {
@@ -159,7 +159,13 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
               readOnly
             />
           ) : (
-            <select id="memberId" name="memberId" value={form.memberId} onChange={handleMemberChange} disabled={loadingLists}>
+            <select
+              id="memberId"
+              name="memberId"
+              value={form.memberId}
+              onChange={handleMemberChange}
+              disabled={loadingLists}
+            >
               <option value="">{loadingLists ? "Loading..." : "Select requesting member"}</option>
               {requestedMembers.map((m) => (
                 <option key={m._id} value={m._id}>
@@ -171,7 +177,6 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
           {errors.memberId && <span className="error-text">{errors.memberId}</span>}
         </div>
 
-        {/* Member Tier & Limit Justification Card for Librarian */}
         {currentMember && (
           <div
             style={{
@@ -204,8 +209,13 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary, #666)" }}>
-              <span>Max Duration: <strong>{memberTier.maxIssueDays} days</strong></span>
-              <span>Allowed Books: <strong>{memberTier.maxBooks === Infinity ? "Unlimited" : `${memberTier.maxBooks} max`}</strong></span>
+              <span>
+                Max Duration: <strong>{memberTier.maxIssueDays} days</strong>
+              </span>
+              <span>
+                Allowed Books:{" "}
+                <strong>{memberTier.maxBooks === Infinity ? "Unlimited" : `${memberTier.maxBooks} max`}</strong>
+              </span>
             </div>
           </div>
         )}
@@ -222,9 +232,19 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
               readOnly
             />
           ) : (
-            <select id="bookId" name="bookId" value={form.bookId} onChange={handleBookChange} disabled={loadingLists || !form.memberId}>
+            <select
+              id="bookId"
+              name="bookId"
+              value={form.bookId}
+              onChange={handleBookChange}
+              disabled={loadingLists || !form.memberId}
+            >
               <option value="">
-                {!form.memberId ? "Select a member first" : eligibleBooks.length === 0 ? "No requested books" : "Select requested book"}
+                {!form.memberId
+                  ? "Select a member first"
+                  : eligibleBooks.length === 0
+                  ? "No requested books"
+                  : "Select requested book"}
               </option>
               {eligibleBooks.map((b) => (
                 <option key={b.bookId} value={b.bookId}>
@@ -242,11 +262,7 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
             <span style={{ color: "var(--danger, #e53935)", marginLeft: 4 }}>*</span>
           </label>
           {isLocked ? (
-            <input
-              id="dueDate"
-              value={formatDate(form.dueDate)}
-              readOnly
-            />
+            <input id="dueDate" value={formatDate(form.dueDate)} readOnly />
           ) : (
             <input
               id="dueDate"
@@ -273,7 +289,11 @@ export default function IssueFormModal({ initial = {}, onClose, onSaved }) {
           <button type="button" className="btn btn-soft" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn" disabled={saving || (!isLocked && (loadingLists || requestedMembers.length === 0))}>
+          <button
+            type="submit"
+            className="btn"
+            disabled={saving || (!isLocked && (loadingLists || requestedMembers.length === 0))}
+          >
             {saving ? "Issuing..." : "Confirm & Issue book"}
           </button>
         </div>

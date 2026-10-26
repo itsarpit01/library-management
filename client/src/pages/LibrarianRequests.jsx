@@ -4,6 +4,7 @@ import { useToast } from "../context/ToastContext";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate, dateInput, toDateInput } from "../utils/format";
 import { reviewSchema } from "../schemas/requestSchema";
+import { getEffectiveTier } from "../utils/membershipConfig";
 import { statusBadge } from "./PurchaserRequests";
 import Modal from "../components/Modal";
 import IssueFormModal from "../components/IssueFormModal";
@@ -62,75 +63,15 @@ export default function LibrarianRequests() {
     setFormError("");
   };
 
-  // Helper to render member tier badge (Clean SVGs, No Emojis)
-  const renderTierBadge = (membership) => {
-    const tier = membership?.tier || "free";
-    if (tier === "ultimate") {
-      return (
-        <span
-          className="badge"
-          style={{
-            background: "linear-gradient(135deg, #f59e0b, #d97706)",
-            color: "#fff",
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            padding: "2px 7px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-          </svg>
-          Ultimate
-        </span>
-      );
-    }
-    if (tier === "premium") {
-      return (
-        <span
-          className="badge"
-          style={{
-            background: "linear-gradient(135deg, #6366f1, #4338ca)",
-            color: "#fff",
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            padding: "2px 7px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-          Premium
-        </span>
-      );
-    }
-    return (
-      <span
-        className="badge"
-        style={{
-          background: "var(--card-bg, #f3f4f6)",
-          color: "var(--text-secondary, #6b7280)",
-          fontSize: "0.72rem",
-          border: "1px solid var(--border, #d1d5db)",
-          padding: "2px 7px",
-        }}
-      >
-        Free
-      </span>
-    );
-  };
+  // Requesting member ka membership tier
+  const memberTier = getEffectiveTier(selected?.requestedBy);
 
-  // Date matching check
+  // Date matching validation
   const userNeededDate = selected?.neededUntil ? toDateInput(selected.neededUntil) : "";
   const isDateMismatch = Boolean(selected && proposedDate && userNeededDate && proposedDate !== userNeededDate);
   const isCounterOffered = selected?.status === "counter_offered";
-  
-  // Approve is ONLY allowed if: not saving, not in counter_offered state, AND dates match perfectly
+
+  // Approve tabhi allow hoga jab: not saving, not counter_offered, AUR dono dates exactly match karein
   const canApprove = !saving && !isCounterOffered && !isDateMismatch;
 
   const review = async (status) => {
@@ -199,6 +140,69 @@ export default function LibrarianRequests() {
     }
   };
 
+  // Helper: Member Tier Badge (0 Emojis, clean SVGs)
+  const renderTierBadge = (membership) => {
+    const tier = membership?.tier || "free";
+    if (tier === "ultimate") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          Ultimate
+        </span>
+      );
+    }
+    if (tier === "premium") {
+      return (
+        <span
+          className="badge"
+          style={{
+            background: "linear-gradient(135deg, #6366f1, #4338ca)",
+            color: "#fff",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            padding: "2px 7px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          Premium
+        </span>
+      );
+    }
+    return (
+      <span
+        className="badge"
+        style={{
+          background: "var(--card-bg, #f3f4f6)",
+          color: "var(--text-secondary, #6b7280)",
+          fontSize: "0.72rem",
+          border: "1px solid var(--border, #d1d5db)",
+          padding: "2px 7px",
+        }}
+      >
+        Free
+      </span>
+    );
+  };
+
   return (
     <>
       <div className="page-head">
@@ -248,7 +252,7 @@ export default function LibrarianRequests() {
                     <span className="cell-sub">{r.author}</span>
                   </td>
                   <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span>{r.requestedBy?.name}</span>
                       {renderTierBadge(r.requestedBy?.membership)}
                     </div>
@@ -306,13 +310,33 @@ export default function LibrarianRequests() {
                   id="proposedDate"
                   type="date"
                   min={dateInput(1)}
+                  max={
+                    memberTier.tier !== "ultimate" && memberTier.maxIssueDays !== Infinity
+                      ? dateInput(memberTier.maxIssueDays)
+                      : undefined
+                  }
                   value={proposedDate}
                   onChange={(e) => setProposedDate(e.target.value)}
                 />
                 <span className="hint">
                   Member requested: <strong>{selected.neededUntil ? formatDate(selected.neededUntil) : "-"}</strong>.
+                  {" "}Plan limit: <strong>{memberTier.tier === "ultimate" ? "All upcoming dates available" : `Max ${memberTier.maxIssueDays} days`}</strong>.
                   {isDateMismatch && (
-                    <span style={{ color: "#d97706", display: "block", marginTop: 4 }}>
+                    <span
+                      style={{
+                        color: "#d97706",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 6,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
                       Date mismatch: Click <strong>"Propose Date"</strong> to negotiate with the user first.
                     </span>
                   )}
@@ -335,7 +359,21 @@ export default function LibrarianRequests() {
               </div>
 
               {isCounterOffered && (
-                <p className="hint" style={{ color: "#ed6c02", marginBottom: 10 }}>
+                <p
+                  className="hint"
+                  style={{
+                    color: "#ed6c02",
+                    marginBottom: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
                   Counter-offer is active. Waiting for member to accept or edit their request before issuing.
                 </p>
               )}

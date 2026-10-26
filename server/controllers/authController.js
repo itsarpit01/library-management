@@ -19,6 +19,10 @@ const publicUser = (user) => ({
   email: user.email,
   role: user.role,
   avatar: user.avatar,
+  membership: {
+    tier: user.membership?.tier || "free",
+    expiresAt: user.membership?.expiresAt || null,
+  },
 });
 
 // httpOnly cookie: JS isse padh nahi sakta (XSS se token chori nahi hoga)
@@ -49,7 +53,6 @@ export const register = async (req, res) => {
       role: "purchaser",
     });
 
-    // Register ke baad user ko login page par bhejte hain, isliye cookie set nahi
     res.status(201).json({ user: publicUser(user) });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -64,7 +67,6 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email });
     const isMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-    // Same message dono cases mein, taaki pata na chale ki email exist karta hai ya nahi
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -76,10 +78,12 @@ export const login = async (req, res) => {
   }
 };
 
-// GET /api/auth/me  (protect ke baad): refresh par session wapas lene ke liye
+// GET /api/auth/me (protect ke baad): refresh par session wapas lene ke liye
 export const me = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("name email role avatar");
+    const user = await User.findById(req.user.id).select(
+      "name email role avatar membership"
+    );
     if (!user) return res.status(401).json({ message: "User not found" });
     res.json({ user: publicUser(user) });
   } catch (error) {
@@ -89,7 +93,7 @@ export const me = async (req, res) => {
 
 // POST /api/auth/logout
 export const logout = (req, res) => {
-  const { maxAge, ...clearOptions } = cookieOptions; // clearCookie ko maxAge nahi chahiye
+  const { maxAge, ...clearOptions } = cookieOptions;
   res.clearCookie("token", clearOptions);
   res.json({ message: "Logged out" });
 };
@@ -100,7 +104,6 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
-// OTP ko secret ke saath HMAC karte hain (DB leak se OTP nahi milega)
 const hashOtp = (otp) =>
   crypto.createHmac("sha256", process.env.JWT_SECRET).update(otp).digest("hex");
 
@@ -118,7 +121,6 @@ export const forgotPassword = async (req, res) => {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
-    // User nahi hai to bhi same response (email exist karta hai ye chhupane ke liye)
     if (!user) return res.json(GENERIC);
 
     const existing = await PasswordReset.findOne({ email });
@@ -191,7 +193,7 @@ export const resetPassword = async (req, res) => {
 
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-    await PasswordReset.deleteOne({ email }); // OTP ek hi baar use hota hai
+    await PasswordReset.deleteOne({ email });
 
     res.json({ message: "Password reset successful. Please login." });
   } catch (error) {

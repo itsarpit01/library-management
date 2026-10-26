@@ -1,15 +1,22 @@
 import { useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { dueDateFormSchema } from "../schemas/issueSchema";
+import { makeDueDateFormSchema } from "../schemas/issueSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
-import { dateInput, formatDate, toDateInput, MAX_ISSUE_DAYS } from "../utils/format";
+import { dateInput, formatDate, toDateInput } from "../utils/format";
+import { getEffectiveTier } from "../utils/membershipConfig";
 
 // mode: "direct" (librarian) ya "request" (purchaser)
 export default function ReissueModal({ issue, mode, onClose, onSaved }) {
+  const { user } = useAuth();
   const toast = useToast();
-  // Default to tomorrow (1 day after today), not max days
+
+  const isRequest = mode === "request";
+  // Purchaser side par apna plan, librarian side par issue ke member ka plan
+  const tier = isRequest ? getEffectiveTier(user) : getEffectiveTier(issue.member);
+
   const [dueDate, setDueDate] = useState(
     issue.reissueRequestedDate ? toDateInput(issue.reissueRequestedDate) : dateInput(1)
   );
@@ -18,13 +25,12 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   const currentDue = toDateInput(issue.dueDate);
-  const isRequest = mode === "request";
 
   const submit = async (e) => {
     e.preventDefault();
     setFormError("");
 
-    const parsed = dueDateFormSchema.safeParse({ dueDate });
+    const parsed = makeDueDateFormSchema(tier.maxIssueDays).safeParse({ dueDate });
     if (!parsed.success) return setError(parsed.error.issues[0].message);
     if (dueDate <= currentDue) return setError("New date must be after the current due date");
 
@@ -56,10 +62,16 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
           <p><span>Book</span>{issue.book?.title}</p>
           <p><span>Current due</span>{formatDate(issue.dueDate)}</p>
           <p><span>Reissued</span>{issue.reissueCount || 0} time(s)</p>
+          <p>
+            <span>Member Plan</span>
+            <strong style={{ color: tier.color, textTransform: "capitalize" }}>{tier.name}</strong>
+          </p>
           {issue.reissueRequested && (
             <p>
               <span>Requested date</span>
-              <strong style={{ color: "var(--primary, #5c6bc0)" }}>{formatDate(issue.reissueRequestedDate)}</strong>
+              <strong style={{ color: "var(--primary, #5c6bc0)" }}>
+                {formatDate(issue.reissueRequestedDate)}
+              </strong>
             </p>
           )}
         </div>
@@ -70,7 +82,7 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
             id="dueDate"
             type="date"
             min={dateInput(1)}
-            max={dateInput(MAX_ISSUE_DAYS)}
+            max={dateInput(tier.maxIssueDays)}
             value={dueDate}
             onChange={(e) => {
               setDueDate(e.target.value);
@@ -80,7 +92,9 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
           {error ? (
             <span className="error-text">{error}</span>
           ) : (
-            <span className="hint">Max {MAX_ISSUE_DAYS} days from today.</span>
+            <span className="hint">
+              Max {tier.maxIssueDays} days from today for <strong>{tier.name}</strong> membership.
+            </span>
           )}
         </div>
 

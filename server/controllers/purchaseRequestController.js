@@ -4,9 +4,8 @@ import Book from "../models/Book.js";
 import Issue from "../models/Issue.js";
 import User from "../models/User.js";
 import { getUserTierConfig } from "../config/membershipConfig.js";
-
-// Automatically reset all users in database to Free tier (until payment gateway is integrated)
-User.updateMany({}, { $set: { membership: { tier: "free", expiresAt: null } } }).exec();
+import { endOfToday } from "../utils/dates.js";
+import { assertDueWithinTier, httpError } from "../services/issueService.js";
 
 const checkId = (id, res) => {
   if (!mongoose.isValidObjectId(id)) {
@@ -36,19 +35,17 @@ export const createRequest = async (req, res) => {
     User.findById(req.user.id),
   ]);
 
-  if (!book) {
-    return res.status(404).json({ message: "Book not found" });
-  }
+  if (!book) return res.status(404).json({ message: "Book not found" });
+  if (!user) return res.status(401).json({ message: "User not found" });
 
   const tierConfig = getUserTierConfig(user);
 
-  // GATE 1: Active Issued Books Limit Check
+  // GATE 1: active issued books limit (Issue mein field "member" hai)
   if (tierConfig.maxBooks !== Infinity) {
     const activeIssuesCount = await Issue.countDocuments({
-      user: req.user.id,
+      member: req.user.id,
       status: "issued",
     });
-
     if (activeIssuesCount >= tierConfig.maxBooks) {
       return res.status(400).json({
         message: `Limit reached: Your ${tierConfig.name} plan allows a maximum of ${tierConfig.maxBooks} active issued books. Please return a book or upgrade your membership.`,
@@ -56,24 +53,10 @@ export const createRequest = async (req, res) => {
     }
   }
 
-  // GATE 2: Max Issue Days Check
-  if (neededUntil) {
-    const requestDate = new Date(neededUntil);
-    const maxAllowedDate = new Date();
-    maxAllowedDate.setDate(maxAllowedDate.getDate() + tierConfig.maxIssueDays);
-    maxAllowedDate.setHours(23, 59, 59, 999);
+  // GATE 2: plan ke hisaab se max din
+  assertDueWithinTier(neededUntil, tierConfig);
 
-    if (requestDate > maxAllowedDate) {
-      return res.status(400).json({
-        message: `Your ${tierConfig.name} membership allows requesting books for up to ${tierConfig.maxIssueDays} days. Upgrade your plan to extend your return window.`,
-      });
-    }
-  }
-
-  // Cap: library ki total copies se zyada request nahi
-  if (quantity > book.totalCopies) {
-    return quantityCapError(res, book.totalCopies);
-  }
+  if (quantity > book.totalCopies) return quantityCapError(res, book.totalCopies);
 
   const request = await PurchaseRequest.create({
     requestedBy: req.user.id,
@@ -117,25 +100,9 @@ export const updateRequest = async (req, res) => {
   const book = await Book.findById(bookId);
   if (!book) return res.status(404).json({ message: "Book not found" });
 
-  const tierConfig = getUserTierConfig(user);
+  assertDueWithinTier(neededUntil, getUserTierConfig(user));
 
-  // GATE: Max Issue Days Check on Edit
-  if (neededUntil) {
-    const requestDate = new Date(neededUntil);
-    const maxAllowedDate = new Date();
-    maxAllowedDate.setDate(maxAllowedDate.getDate() + tierConfig.maxIssueDays);
-    maxAllowedDate.setHours(23, 59, 59, 999);
-
-    if (requestDate > maxAllowedDate) {
-      return res.status(400).json({
-        message: `Your ${tierConfig.name} membership allows requesting books for up to ${tierConfig.maxIssueDays} days.`,
-      });
-    }
-  }
-
-  if (quantity > book.totalCopies) {
-    return quantityCapError(res, book.totalCopies);
-  }
+  if (quantity > book.totalCopies) return quantityCapError(res, book.totalCopies);
 
   const updated = await PurchaseRequest.findOneAndUpdate(
     { _id: existing._id, requestedBy: req.user.id, status: { $in: ["pending", "counter_offered"] } },
@@ -152,9 +119,7 @@ export const updateRequest = async (req, res) => {
     },
     { new: true }
   );
-  if (!updated) {
-    return res.status(409).json({ message: "Request was already reviewed" });
-  }
+  if (!updated) return res.status(409).json({ message: "Request was already reviewed" });
   res.json(updated);
 };
 
@@ -167,18 +132,19 @@ export const acceptCounterOffer = async (req, res) => {
     requestedBy: req.user.id,
     status: "counter_offered",
   });
-
   if (!existing) {
     return res.status(404).json({ message: "Counter offer not found or not in counter_offered status" });
   }
-
   if (!existing.proposedDate) {
     return res.status(400).json({ message: "No proposed date found on this counter offer" });
   }
 
   existing.neededUntil = existing.proposedDate;
-  existing.status = "pending";
-  existing.reviewNote = existing.reviewNote ? `${existing.reviewNote} (Accepted proposed date by user)` : "Accepted proposed date by user";
+  existing.proposedDate = null;
+  existing.status = "pending"; // ab dono dates same, librarian approve kar sakta hai
+  existing.reviewNote = existing.reviewNote
+    ? `${existing.reviewNote} (Accepted proposed date by user)`
+    : "Accepted proposed date by user";
   await existing.save();
 
   res.json(existing);
@@ -193,10 +159,7 @@ export const cancelRequest = async (req, res) => {
     requestedBy: req.user.id,
     status: { $in: ["pending", "counter_offered"] },
   });
-
-  if (!deleted) {
-    return res.status(404).json({ message: "Pending request not found" });
-  }
+  if (!deleted) return res.status(404).json({ message: "Pending request not found" });
   res.json({ message: "Request cancelled" });
 };
 
@@ -215,9 +178,23 @@ export const getAllRequests = async (req, res) => {
 // PATCH /api/purchase-requests/:id/review (librarian)
 export const reviewRequest = async (req, res) => {
   if (!checkId(req.params.id, res)) return;
-  const { status, proposedDate, reviewNote } = req.body;
+  const { status, reviewNote } = req.body;
 
-  const updateFields = {
+  const existing = await PurchaseRequest.findById(req.params.id).populate(
+    "requestedBy",
+    "membership"
+  );
+  if (!existing) return res.status(404).json({ message: "Request not found" });
+  if (!["pending", "counter_offered"].includes(existing.status)) {
+    return res.status(409).json({ message: "Request already reviewed" });
+  }
+
+  // Counter ke dauran approve nahi: pehle purchaser accept kare ya librarian naya counter/reject de
+  if (status === "approved" && existing.status === "counter_offered") {
+    throw httpError(409, "Waiting for the member to respond to your counter offer");
+  }
+
+  const update = {
     status,
     reviewNote,
     reviewedBy: req.user.id,
@@ -225,23 +202,29 @@ export const reviewRequest = async (req, res) => {
   };
 
   if (status === "counter_offered") {
-    if (!proposedDate) {
-      return res.status(400).json({ message: "Proposed date is required for counter offer" });
+    const proposed = new Date(req.body.proposedDate);
+    proposed.setHours(23, 59, 59, 0); // din ka aakhri second
+
+    if (proposed <= endOfToday()) {
+      throw httpError(400, "Proposed date must be from tomorrow onwards");
     }
-    updateFields.proposedDate = proposedDate;
+    if (existing.neededUntil && proposed >= existing.neededUntil) {
+      throw httpError(
+        400,
+        "Proposed date is not earlier than the requested date. Approve the request instead."
+      );
+    }
+    assertDueWithinTier(proposed, getUserTierConfig(existing.requestedBy));
+    update.proposedDate = proposed;
+  } else {
+    update.proposedDate = null;
   }
 
   const updated = await PurchaseRequest.findOneAndUpdate(
-    { _id: req.params.id, status: { $in: ["pending", "counter_offered"] } },
-    updateFields,
+    { _id: existing._id, status: existing.status }, // beech mein badla ho to fail
+    update,
     { new: true }
   );
-
-  if (!updated) {
-    const exists = await PurchaseRequest.exists({ _id: req.params.id });
-    return exists
-      ? res.status(409).json({ message: "Request already reviewed" })
-      : res.status(404).json({ message: "Request not found" });
-  }
+  if (!updated) return res.status(409).json({ message: "Request already reviewed" });
   res.json(updated);
 };

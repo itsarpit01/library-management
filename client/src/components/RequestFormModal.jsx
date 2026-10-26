@@ -18,7 +18,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   const lockedId = !isEdit ? initial.bookId || "" : "";
   const isLocked = Boolean(lockedId);
 
-  // User's active membership tier
   const tier = getEffectiveTier(user);
 
   const [books, setBooks] = useState([]);
@@ -84,11 +83,9 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
 
   const selected = books.find((b) => b._id === form.bookId);
 
-  // GATE 1: Check if user has reached max active books limit for their tier
   const isLimitReached =
     !isEdit && tier.maxBooks !== Infinity && myActiveIssues.length >= tier.maxBooks;
 
-  // Check if book currently has an active block
   const existingActiveRequest = !isEdit && form.bookId
     ? myRequests.find((r) => {
         const isThisBook = r.book === form.bookId || r.book?._id === form.bookId;
@@ -97,12 +94,10 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         if (["pending", "counter_offered"].includes(r.status)) return true;
 
         if (r.status === "approved") {
-          const isCurrentlyIssued = myActiveIssues.some(
+          return myActiveIssues.some(
             (i) => i.book?._id === form.bookId || i.book === form.bookId
           );
-          return isCurrentlyIssued;
         }
-
         return false;
       })
     : null;
@@ -123,7 +118,8 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
     if (existingActiveRequest || isLimitReached) return;
     setFormError("");
 
-    const parsed = makeRequestFormSchema(selected?.totalCopies).safeParse(form);
+    // Date ki limit user ke plan se
+    const parsed = makeRequestFormSchema(selected?.totalCopies, tier.maxIssueDays).safeParse(form);
     if (!parsed.success) {
       const fe = {};
       parsed.error.issues.forEach((i) => {
@@ -160,7 +156,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         <form onSubmit={submit} noValidate>
           {formError && <div className="alert-error">{formError}</div>}
 
-          {/* GATE 1 ALERT: Active Books Tier Limit */}
           {isLimitReached && (
             <div
               style={{
@@ -190,7 +185,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
             </div>
           )}
 
-          {/* Existing Request Status Alert */}
           {existingActiveRequest && (
             <div
               style={{
@@ -286,7 +280,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
             {errors.quantity && <span className="error-text">{errors.quantity}</span>}
           </div>
 
-          {/* Dynamic Needed Until Calendar Gate */}
           <div className="field">
             <label htmlFor="neededUntil">
               Needed until
@@ -345,10 +338,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         </form>
       </Modal>
 
-      {/* Upgrade Plan Modal */}
-      {showUpgradeModal && (
-        <MembershipModal onClose={() => setShowUpgradeModal(false)} />
-      )}
+      {showUpgradeModal && <MembershipModal onClose={() => setShowUpgradeModal(false)} />}
     </>
   );
 }

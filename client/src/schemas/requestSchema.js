@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { dueDateField } from "./issueSchema";
+import { makeDueDateField } from "./issueSchema";
 
-export const makeRequestFormSchema = (maxQty) =>
+export const makeRequestFormSchema = (maxQty, maxDays) =>
   z.object({
     bookId: z.string().min(1, "Select a book"),
     quantity: z.coerce
@@ -9,12 +9,12 @@ export const makeRequestFormSchema = (maxQty) =>
       .int("Quantity must be a whole number")
       .min(1, "At least 1")
       .max(maxQty || 1, maxQty ? `Library has only ${maxQty} copies` : "Select a book first"),
+    neededUntil: makeDueDateField(maxDays),
     reason: z
       .string()
       .trim()
       .min(5, "Reason must be at least 5 characters")
       .max(500, "Max 500 characters"),
-      neededUntil: dueDateField,
   });
 
 export const reviewSchema = z.object({

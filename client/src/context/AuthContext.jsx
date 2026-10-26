@@ -29,9 +29,20 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  // Profile page naam badalne ke baad topbar update karne ke liye
+  // Profile page naam/photo badalne ke baad topbar update karne ke liye
   const updateUser = useCallback((changes) => {
     setUser((u) => (u ? { ...u, ...changes } : u));
+  }, []);
+
+  // Server se latest user (plan badalne ke baad logout kiye bina)
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      setUser(data.user);
+      return data.user;
+    } catch {
+      return null;
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -53,7 +64,17 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, setUser, updateUser, loading, isAuthenticated, login, register, logout }}
+      value={{
+        user,
+        setUser,
+        updateUser,
+        refreshUser,
+        loading,
+        isAuthenticated,
+        login,
+        register,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
