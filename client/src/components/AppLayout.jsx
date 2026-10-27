@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
@@ -34,13 +35,38 @@ export default function AppLayout() {
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
 
-  const links = NAV[user.role] || [];
-  const avatarSrc = user.avatar ? `${SERVER_URL}${user.avatar}` : null;
+  // Active slots in sidebar
+  const [sidebarCapacity, setSidebarCapacity] = useState({ active: 0, pending: 0 });
+
+  const links = NAV[user?.role] || [];
+  const avatarSrc = user?.avatar ? `${SERVER_URL}${user.avatar}` : null;
   const tier = getEffectiveTier(user);
 
   useEffect(() => {
     setAvatarBroken(false);
-  }, [user.avatar]);
+  }, [user?.avatar]);
+
+  // Load quota for purchaser sidebar widget
+  const loadSidebarQuota = useCallback(async () => {
+    if (user?.role !== "purchaser") return;
+    try {
+      const [reqRes, issueRes] = await Promise.all([
+        api.get("/purchase-requests/my").catch(() => ({ data: [] })),
+        api.get("/issues/my").catch(() => ({ data: [] })),
+      ]);
+      const reqs = Array.isArray(reqRes.data) ? reqRes.data : [];
+      const pending = reqs.filter((r) => ["pending", "counter_offered"].includes(r.status)).length;
+      const issues = Array.isArray(issueRes.data) ? issueRes.data : [];
+      const active = issues.filter((i) => i.status === "issued").length;
+      setSidebarCapacity({ active, pending });
+    } catch {
+      // background silent
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    loadSidebarQuota();
+  }, [loadSidebarQuota]);
 
   const handleLogout = async () => {
     setConfirmLogout(false);
@@ -49,6 +75,11 @@ export default function AppLayout() {
     toast.info("Logged out");
     navigate("/login", { replace: true });
   };
+
+  const totalUsed = sidebarCapacity.active + sidebarCapacity.pending;
+  const remaining = tier.maxBooks === Infinity ? Infinity : Math.max(0, tier.maxBooks - totalUsed);
+  const isFull = tier.maxBooks !== Infinity && totalUsed >= tier.maxBooks;
+  const percentage = tier.maxBooks === Infinity ? 10 : Math.min(100, Math.round((totalUsed / tier.maxBooks) * 100));
 
   return (
     <div className="app">
@@ -79,6 +110,62 @@ export default function AppLayout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* Sidebar Quota & Membership Widget for Purchaser */}
+        {user?.role === "purchaser" && (
+          <div
+            style={{
+              marginTop: "auto",
+              padding: "12px 14px",
+              background: "rgba(92, 107, 192, 0.08)",
+              border: "1px solid rgba(92, 107, 192, 0.18)",
+              borderRadius: 8,
+              margin: "auto 12px 12px 12px",
+              cursor: "pointer",
+            }}
+            onClick={() => setShowMembershipModal(true)}
+            title="Click to view membership plans"
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  color: isFull ? "#dc2626" : "var(--primary, #5c6bc0)",
+                }}
+              >
+                {tier.name} Plan
+              </span>
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  color: isFull ? "#dc2626" : "var(--text, #333)",
+                }}
+              >
+                {totalUsed} / {tier.maxBooks === Infinity ? "∞" : tier.maxBooks}
+              </span>
+            </div>
+
+            <div style={{ width: "100%", height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 3, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${percentage}%`,
+                  background: isFull ? "#ef4444" : "var(--primary, #5c6bc0)",
+                  borderRadius: 3,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
+              <span>{isFull ? "Limit Reached" : `${remaining} slot(s) left`}</span>
+              <span style={{ color: "var(--primary, #5c6bc0)", fontWeight: 600 }}>Upgrade →</span>
+            </div>
+          </div>
+        )}
       </aside>
 
       <div className="main">
@@ -96,8 +183,8 @@ export default function AppLayout() {
           <div className="topbar-right">
             <ThemeToggle />
 
-            {/* Eye-Catching Attractive Membership Button */}
-            {user.role === "purchaser" && (
+            {/* Topbar Plan Pill */}
+            {user?.role === "purchaser" && (
               <button
                 type="button"
                 className="btn btn-sm"
@@ -108,42 +195,32 @@ export default function AppLayout() {
                       ? "linear-gradient(135deg, #f59e0b, #d97706)"
                       : tier.tier === "premium"
                       ? "linear-gradient(135deg, #6366f1, #4338ca)"
-                      : "linear-gradient(135deg, #f3e8ff, #ede9fe)", // Soft vibrant purple for Free
-                  color:
-                    tier.tier === "free" ? "#6d28d9" : "#fff",
-                  border:
-                    tier.tier === "free" ? "1.5px solid #a78bfa" : "none",
+                      : "linear-gradient(135deg, #f3e8ff, #ede9fe)",
+                  color: tier.tier === "free" ? "#6d28d9" : "#fff",
+                  border: tier.tier === "free" ? "1.5px solid #a78bfa" : "none",
                   fontWeight: 700,
                   fontSize: "0.82rem",
-                  padding: "6px 14px",
+                  padding: "5px 12px",
                   borderRadius: "20px",
-                  boxShadow:
-                    tier.tier === "free"
-                      ? "0 2px 8px rgba(167, 139, 250, 0.25)"
-                      : "0 2px 8px rgba(0,0,0,0.2)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                   cursor: "pointer",
-                  transition: "transform 0.15s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
                 title="Click to view or upgrade your membership"
               >
-                <span>{tier.tier === "free" ? " Free Plan" : tier.badge}</span>
+                <span>{tier.name} Plan</span>
                 {tier.tier === "free" && (
                   <span
                     style={{
                       background: "#7c3aed",
                       color: "#fff",
                       fontSize: "0.7rem",
-                      padding: "2px 7px",
+                      padding: "1px 6px",
                       borderRadius: "10px",
-                      marginLeft: 2,
                     }}
                   >
-                    Upgrade 
+                    Upgrade
                   </span>
                 )}
               </button>
