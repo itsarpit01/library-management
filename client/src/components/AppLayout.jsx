@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -30,6 +30,8 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation(); // Har route change ko listen karega
+
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
@@ -64,9 +66,25 @@ export default function AppLayout() {
     }
   }, [user?.role]);
 
+  // REAL-TIME AUTO SYNC:
+  // 1. Har page navigation par chalega (location.pathname)
+  // 2. Custom "quota-updated" event par turant chalega (0 ms delay)
+  // 3. Tab focus par chalega
   useEffect(() => {
     loadSidebarQuota();
-  }, [loadSidebarQuota]);
+
+    const handleQuotaEvent = () => {
+      loadSidebarQuota();
+    };
+
+    window.addEventListener("quota-updated", handleQuotaEvent);
+    window.addEventListener("focus", handleQuotaEvent);
+
+    return () => {
+      window.removeEventListener("quota-updated", handleQuotaEvent);
+      window.removeEventListener("focus", handleQuotaEvent);
+    };
+  }, [location.pathname, loadSidebarQuota]);
 
   const handleLogout = async () => {
     setConfirmLogout(false);
@@ -226,10 +244,10 @@ export default function AppLayout() {
               </button>
             )}
 
-            <Link to={`/${user.role}/profile`} className="profile-link" title="My profile">
+            <Link to={`/${user?.role}/profile`} className="profile-link" title="My profile">
               <div className="user-meta">
-                <strong>{user.name}</strong>
-                <span>{user.role}</span>
+                <strong>{user?.name}</strong>
+                <span>{user?.role}</span>
               </div>
               {avatarSrc && !avatarBroken ? (
                 <img
@@ -240,7 +258,7 @@ export default function AppLayout() {
                   style={{ objectFit: "cover" }}
                 />
               ) : (
-                <span className="avatar">{user.name?.[0]?.toUpperCase()}</span>
+                <span className="avatar">{user?.name?.[0]?.toUpperCase()}</span>
               )}
             </Link>
             <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>

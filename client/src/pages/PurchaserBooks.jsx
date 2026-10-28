@@ -297,7 +297,6 @@ export default function PurchaserBooks() {
         />
       )}
 
-      {/* Upgrade Membership Modal */}
       {showUpgradeModal && (
         <MembershipModal onClose={() => setShowUpgradeModal(false)} />
       )}

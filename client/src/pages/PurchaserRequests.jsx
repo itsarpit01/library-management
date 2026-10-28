@@ -94,6 +94,10 @@ export default function PurchaserRequests() {
     try {
       await api.delete(`/purchase-requests/${toCancel._id}`);
       toast.success("Request cancelled");
+
+      // ⚡ Real-Time Signal: Cancel hote hi sidebar slot instant free (+1)
+      window.dispatchEvent(new Event("quota-updated"));
+
       setToCancel(null);
       load();
     } catch (err) {
@@ -109,6 +113,10 @@ export default function PurchaserRequests() {
     try {
       await api.patch(`/purchase-requests/${r._id}/accept-counter`);
       toast.success("Proposed date accepted! Your needed-until date is updated.");
+
+      // ⚡ Real-Time Signal
+      window.dispatchEvent(new Event("quota-updated"));
+
       load();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -193,6 +201,8 @@ export default function PurchaserRequests() {
             <thead>
               <tr>
                 <th>Book</th>
+                {/* 📅 Requested on date column */}
+                <th style={{ whiteSpace: "nowrap" }}>Requested on</th>
                 <th>Qty</th>
                 <th style={{ whiteSpace: "nowrap" }}>Needed until</th>
                 <th style={{ whiteSpace: "nowrap" }}>Librarian proposed</th>
@@ -210,8 +220,10 @@ export default function PurchaserRequests() {
                       by {r.author}
                     </span>
                   </td>
+                  {/* Single Line Requested on Date */}
+                  <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.createdAt)}</td>
                   <td>{r.quantity}</td>
-                  {/* Single Line Date */}
+                  {/* Single Line Needed until Date */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.neededUntil)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.proposedDate ? (
@@ -259,7 +271,7 @@ export default function PurchaserRequests() {
                         </button>
                       </div>
                     ) : (
-                      /* Approved or Rejected shows VIEW button */
+                      /* Approved ya Rejected par VIEW button */
                       <button
                         className="btn btn-soft btn-sm"
                         onClick={() => setViewRequest(r)}
