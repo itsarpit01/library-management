@@ -89,7 +89,6 @@ export default function PurchaserRequests() {
       if (startDate || endDate) {
         const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
         const fromDate = startDate || "1970-01-01";
-        // Agar user ne To Date select nahi ki, toh automatically current date (today) tak show hoga
         const toDate = endDate || todayStr;
 
         if (createdDate < fromDate || createdDate > toDate) {
@@ -157,24 +156,46 @@ export default function PurchaserRequests() {
         </button>
       </div>
 
-      {/* Search & Date Range Toolbar */}
-      <div className="toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Search by Book Title or Author */}
-        <div className="search-box" style={{ flex: "1 1 200px" }}>
-          <SearchIcon size={18} />
+      {/* Search & Date Range Toolbar (1 Single Horizontal Line) */}
+      <div
+        className="toolbar"
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          paddingBottom: 4,
+          marginBottom: 16,
+        }}
+      >
+        {/* Compact Search Bar */}
+        <div className="search-box" style={{ maxWidth: 240, minWidth: 180, flex: "0 1 240px" }}>
+          <SearchIcon size={16} />
           <input
-            placeholder="Search by book name or author..."
+            placeholder="Search book or author..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        {/* Status Dropdown */}
+        {/* Status Dropdown with Inner SVG Arrow */}
         <select
           className="toolbar-input"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ minWidth: 140 }}
+          style={{
+            width: "auto",
+            minWidth: 140,
+            appearance: "none",
+            WebkitAppearance: "none",
+            MozAppearance: "none",
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6784' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 10px center",
+            paddingRight: 32,
+            cursor: "pointer",
+          }}
         >
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
@@ -183,26 +204,43 @@ export default function PurchaserRequests() {
           <option value="rejected">Rejected</option>
         </select>
 
-        {/* Date Range: From -> To (Auto current date) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: "var(--card-bg, #f9fafb)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border, #e5e7eb)" }}>
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
+        {/* Date Range: From -> To (Locked in 1 Single Line) */}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "nowrap",
+            whiteSpace: "nowrap",
+            background: "var(--card-bg, #f9fafb)",
+            padding: "4px 8px",
+            borderRadius: 8,
+            border: "1px solid var(--border, #e5e7eb)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>
+            From:
+          </span>
           <input
             type="date"
             className="toolbar-input"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
             title="Start date (Requests from this date onwards)"
           />
 
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>
+            To:
+          </span>
           <input
             type="date"
             className="toolbar-input"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             placeholder="Today"
-            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
             title="End date (leave blank for up to today)"
           />
 
@@ -210,7 +248,7 @@ export default function PurchaserRequests() {
             <button
               className="btn btn-soft btn-sm"
               onClick={clearDateRange}
-              style={{ padding: "3px 8px", fontSize: "0.78rem" }}
+              style={{ padding: "3px 8px", fontSize: "0.75rem", marginLeft: 2 }}
               title="Reset date range"
             >
               Clear
@@ -228,29 +266,39 @@ export default function PurchaserRequests() {
           <table>
             <thead>
               <tr>
-                <th>Book</th>
+                <th style={{ whiteSpace: "nowrap" }}>Book</th>
                 <th style={{ whiteSpace: "nowrap" }}>Requested on</th>
-                <th>Qty</th>
+                <th style={{ whiteSpace: "nowrap" }}>Qty</th>
                 <th style={{ whiteSpace: "nowrap" }}>Needed until</th>
                 <th style={{ whiteSpace: "nowrap" }}>Librarian proposed</th>
-                <th>Status</th>
-                <th>Librarian note</th>
-                <th>Actions</th>
+                <th style={{ whiteSpace: "nowrap" }}>Status</th>
+                <th style={{ whiteSpace: "nowrap" }}>Librarian note</th>
+                <th style={{ whiteSpace: "nowrap" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredRequests.map((r) => (
                 <tr key={r._id}>
-                  <td>
+                  {/* Book & Author in 1 Single Line */}
+                  <td style={{ whiteSpace: "nowrap" }}>
                     <strong>{r.title}</strong>
-                    <span className="cell-sub" style={{ display: "inline-block", marginLeft: 6 }}>
-                      by {r.author}
-                    </span>
+                    {r.author && (
+                      <span style={{ fontSize: "12px", color: "var(--muted, #6b6784)", marginLeft: 6 }}>
+                        by {r.author}
+                      </span>
+                    )}
                   </td>
-                  {/* Single Line Requested on Date */}
+
+                  {/* Requested Date */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.createdAt)}</td>
-                  <td>{r.quantity}</td>
+
+                  {/* Qty */}
+                  <td style={{ whiteSpace: "nowrap" }}>{r.quantity}</td>
+
+                  {/* Needed Until */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.neededUntil)}</td>
+
+                  {/* Librarian Proposed Date */}
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.proposedDate ? (
                       <strong style={{ color: "var(--primary, #5c6bc0)" }}>
@@ -260,44 +308,55 @@ export default function PurchaserRequests() {
                       "-"
                     )}
                   </td>
-                  <td>{statusBadge(r.status)}</td>
-                  <td>
+
+                  {/* Status */}
+                  <td style={{ whiteSpace: "nowrap" }}>{statusBadge(r.status)}</td>
+
+                  {/* Librarian Note in 1 Single Line */}
+                  <td style={{ whiteSpace: "nowrap" }}>
                     {r.reviewNote ? (
-                      <span style={{ whiteSpace: "nowrap" }}>
-                        {r.reviewNote} {r.reviewedBy && <span className="cell-sub">({r.reviewedBy.name})</span>}
+                      <span>
+                        {r.reviewNote}
+                        {r.reviewedBy?.name && (
+                          <span style={{ fontSize: "12px", color: "var(--muted, #6b6784)", marginLeft: 4 }}>
+                            ({r.reviewedBy.name})
+                          </span>
+                        )}
                       </span>
                     ) : (
                       "-"
                     )}
                   </td>
-                  <td>
+
+                  {/* Actions in 1 Single Line */}
+                  <td style={{ whiteSpace: "nowrap" }}>
                     {r.status === "counter_offered" ? (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", whiteSpace: "nowrap" }}>
+                      <div style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
                         <button
                           className="btn btn-sm"
                           onClick={() => handleAcceptCounter(r)}
                           disabled={acceptingId === r._id}
+                          style={{ whiteSpace: "nowrap" }}
                         >
                           <CheckIcon size={16} /> {acceptingId === r._id ? "Accepting..." : "Accept"}
                         </button>
-                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
+                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)} style={{ whiteSpace: "nowrap" }}>
                           <EditIcon size={16} /> Edit
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
+                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)} style={{ whiteSpace: "nowrap" }}>
                           <TrashIcon size={16} /> Cancel
                         </button>
                       </div>
                     ) : r.status === "pending" ? (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", whiteSpace: "nowrap" }}>
-                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)}>
+                      <div style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                        <button className="btn btn-soft btn-sm" onClick={() => setToEdit(r)} style={{ whiteSpace: "nowrap" }}>
                           <EditIcon size={16} /> Edit
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)}>
+                        <button className="btn btn-danger btn-sm" onClick={() => setToCancel(r)} style={{ whiteSpace: "nowrap" }}>
                           <TrashIcon size={16} /> Cancel
                         </button>
                       </div>
                     ) : (
-                      /* Approved ya Rejected par VIEW button */
                       <button
                         className="btn btn-soft btn-sm"
                         onClick={() => setViewRequest(r)}
