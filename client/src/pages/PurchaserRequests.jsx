@@ -32,12 +32,15 @@ export default function PurchaserRequests() {
   // Filters & Search Toolbar
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [customDate, setCustomDate] = useState("");
+
+  // Date Range (From - To)
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const [showForm, setShowForm] = useState(false);
   const [toEdit, setToEdit] = useState(null);
   const [toCancel, setToCancel] = useState(null);
-  const [viewRequest, setViewRequest] = useState(null); // Modal for Approved/Rejected View
+  const [viewRequest, setViewRequest] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [acceptingId, setAcceptingId] = useState(null);
 
@@ -69,25 +72,39 @@ export default function PurchaserRequests() {
   const totalActiveSlots = activeIssuesCount + pendingCount;
   const isQuotaFull = tier.maxBooks !== Infinity && totalActiveSlots >= tier.maxBooks;
 
-  // Filtered requests by Search query & Custom Date
+  // Filtered requests by Search query & Date Range (From -> Today / To)
   const filteredRequests = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+
     return requests.filter((r) => {
-      // Search by Book name or author
+      // 1. Search by Book name or author
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = r.title?.toLowerCase().includes(q);
         const matchAuthor = r.author?.toLowerCase().includes(q);
         if (!matchTitle && !matchAuthor) return false;
       }
-      // Filter by Custom Date (checks neededUntil or createdAt)
-      if (customDate) {
-        const neededStr = r.neededUntil ? new Date(r.neededUntil).toISOString().slice(0, 10) : "";
-        const createdStr = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
-        if (neededStr !== customDate && createdStr !== customDate) return false;
+
+      // 2. Date Range Filter on Request Creation Date (createdAt)
+      if (startDate || endDate) {
+        const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
+        const fromDate = startDate || "1970-01-01";
+        // Agar user ne To Date select nahi ki, toh automatically current date (today) tak show hoga
+        const toDate = endDate || todayStr;
+
+        if (createdDate < fromDate || createdDate > toDate) {
+          return false;
+        }
       }
+
       return true;
     });
-  }, [requests, searchQuery, customDate]);
+  }, [requests, searchQuery, startDate, endDate]);
+
+  const clearDateRange = () => {
+    setStartDate("");
+    setEndDate("");
+  };
 
   const confirmCancel = async () => {
     setCancelling(true);
@@ -95,7 +112,7 @@ export default function PurchaserRequests() {
       await api.delete(`/purchase-requests/${toCancel._id}`);
       toast.success("Request cancelled");
 
-      // ⚡ Real-Time Signal: Cancel hote hi sidebar slot instant free (+1)
+      // Real-time signal for sidebar quota
       window.dispatchEvent(new Event("quota-updated"));
 
       setToCancel(null);
@@ -114,9 +131,7 @@ export default function PurchaserRequests() {
       await api.patch(`/purchase-requests/${r._id}/accept-counter`);
       toast.success("Proposed date accepted! Your needed-until date is updated.");
 
-      // ⚡ Real-Time Signal
       window.dispatchEvent(new Event("quota-updated"));
-
       load();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -142,10 +157,10 @@ export default function PurchaserRequests() {
         </button>
       </div>
 
-      {/* Search & Filter Toolbar */}
+      {/* Search & Date Range Toolbar */}
       <div className="toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Search input by Book Title or Author */}
-        <div className="search-box" style={{ flex: "1 1 220px" }}>
+        {/* Search by Book Title or Author */}
+        <div className="search-box" style={{ flex: "1 1 200px" }}>
           <SearchIcon size={18} />
           <input
             placeholder="Search by book name or author..."
@@ -159,7 +174,7 @@ export default function PurchaserRequests() {
           className="toolbar-input"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ minWidth: 150 }}
+          style={{ minWidth: 140 }}
         >
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
@@ -168,22 +183,35 @@ export default function PurchaserRequests() {
           <option value="rejected">Rejected</option>
         </select>
 
-        {/* Custom Date Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {/* Date Range: From -> To (Auto current date) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: "var(--card-bg, #f9fafb)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border, #e5e7eb)" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
           <input
             type="date"
             className="toolbar-input"
-            value={customDate}
-            onChange={(e) => setCustomDate(e.target.value)}
-            title="Filter by needed date or request date"
-            style={{ minWidth: 140 }}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            title="Start date (Requests from this date onwards)"
           />
-          {customDate && (
+
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            placeholder="Today"
+            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            title="End date (leave blank for up to today)"
+          />
+
+          {(startDate || endDate) && (
             <button
               className="btn btn-soft btn-sm"
-              onClick={() => setCustomDate("")}
-              title="Clear date filter"
-              style={{ padding: "4px 8px" }}
+              onClick={clearDateRange}
+              style={{ padding: "3px 8px", fontSize: "0.78rem" }}
+              title="Reset date range"
             >
               Clear
             </button>
@@ -201,7 +229,6 @@ export default function PurchaserRequests() {
             <thead>
               <tr>
                 <th>Book</th>
-                {/* 📅 Requested on date column */}
                 <th style={{ whiteSpace: "nowrap" }}>Requested on</th>
                 <th>Qty</th>
                 <th style={{ whiteSpace: "nowrap" }}>Needed until</th>
@@ -223,7 +250,6 @@ export default function PurchaserRequests() {
                   {/* Single Line Requested on Date */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.createdAt)}</td>
                   <td>{r.quantity}</td>
-                  {/* Single Line Needed until Date */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.neededUntil)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.proposedDate ? (
@@ -326,7 +352,7 @@ export default function PurchaserRequests() {
         </Modal>
       )}
 
-      {/* View Details Modal for Approved / Rejected Requests */}
+      {/* View Details Modal */}
       {viewRequest && (
         <Modal title="Request Details" onClose={() => setViewRequest(null)}>
           <div className="detail-list">

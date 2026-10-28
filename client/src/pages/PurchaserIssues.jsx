@@ -14,7 +14,10 @@ export default function PurchaserIssues() {
   // Filters & Search
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateQuery, setDateQuery] = useState("");
+
+  // Date Range (From - To)
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const [toReissue, setToReissue] = useState(null);
 
@@ -34,14 +37,17 @@ export default function PurchaserIssues() {
     load();
   }, [load]);
 
+  // Filtered issues by Search & Date Range (From -> Today / To)
   const filteredIssues = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+
     return issues.filter((i) => {
-      // Status filter
+      // 1. Status filter
       if (statusFilter === "issued" && i.status !== "issued") return false;
       if (statusFilter === "overdue" && (!i.isOverdue || i.status !== "issued")) return false;
       if (statusFilter === "returned" && i.status !== "returned") return false;
 
-      // Search Query (Title, Author, ISBN)
+      // 2. Search Query (Title, Author, ISBN)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = i.book?.title?.toLowerCase().includes(q);
@@ -50,19 +56,26 @@ export default function PurchaserIssues() {
         if (!matchTitle && !matchAuthor && !matchIsbn) return false;
       }
 
-      // Date Query (Checks dueDate, issueDate, or returnDate)
-      if (dateQuery) {
-        const dueStr = i.dueDate ? new Date(i.dueDate).toISOString().slice(0, 10) : "";
-        const issueStr = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
-        const returnStr = i.returnDate ? new Date(i.returnDate).toISOString().slice(0, 10) : "";
-        if (dueStr !== dateQuery && issueStr !== dateQuery && returnStr !== dateQuery) {
+      // 3. Date Range Filter on Issue Date (issueDate)
+      if (startDate || endDate) {
+        const issueDate = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
+        const fromDate = startDate || "1970-01-01";
+        // Agar user ne To Date select nahi ki, toh automatically current date (today) tak show hoga
+        const toDate = endDate || todayStr;
+
+        if (issueDate < fromDate || issueDate > toDate) {
           return false;
         }
       }
 
       return true;
     });
-  }, [issues, statusFilter, searchQuery, dateQuery]);
+  }, [issues, statusFilter, searchQuery, startDate, endDate]);
+
+  const clearDateRange = () => {
+    setStartDate("");
+    setEndDate("");
+  };
 
   const statusBadge = (i) => {
     if (i.status === "returned") return <span className="badge badge-success" style={{ whiteSpace: "nowrap" }}>Returned</span>;
@@ -86,10 +99,10 @@ export default function PurchaserIssues() {
         </div>
       </div>
 
-      {/* Search & Filter Toolbar */}
+      {/* Search & Date Range Toolbar */}
       <div className="toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         {/* Search by Book Title, Author */}
-        <div className="search-box" style={{ flex: "1 1 220px" }}>
+        <div className="search-box" style={{ flex: "1 1 200px" }}>
           <SearchIcon size={18} />
           <input
             placeholder="Search issued books by title, author..."
@@ -111,21 +124,35 @@ export default function PurchaserIssues() {
           <option value="returned">Returned</option>
         </select>
 
-        {/* Date Filter */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {/* Date Range: From -> To (Auto current date) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: "var(--card-bg, #f9fafb)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border, #e5e7eb)" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
           <input
             type="date"
             className="toolbar-input"
-            value={dateQuery}
-            onChange={(e) => setDateQuery(e.target.value)}
-            title="Filter by due, issue, or return date"
-            style={{ minWidth: 140 }}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            title="Start issue date (Issues from this date onwards)"
           />
-          {dateQuery && (
+
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            placeholder="Today"
+            style={{ minWidth: 130, padding: "4px 6px", fontSize: "0.82rem" }}
+            title="End date (leave blank for up to today)"
+          />
+
+          {(startDate || endDate) && (
             <button
               className="btn btn-soft btn-sm"
-              onClick={() => setDateQuery("")}
-              style={{ padding: "4px 8px" }}
+              onClick={clearDateRange}
+              style={{ padding: "3px 8px", fontSize: "0.78rem" }}
+              title="Reset date range"
             >
               Clear
             </button>
