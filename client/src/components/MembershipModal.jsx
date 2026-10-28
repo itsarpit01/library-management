@@ -1,19 +1,88 @@
+import { useState } from "react";
 import api from "../api/axios";
 import Modal from "./Modal";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { MEMBERSHIP_TIERS, getEffectiveTier } from "../utils/membershipConfig";
 import { formatDate } from "../utils/format";
+import { getErrorMessage } from "../utils/errors";
 
 export default function MembershipModal({ onClose }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const toast = useToast();
+  const [processingTier, setProcessingTier] = useState(null);
 
   const currentTier = getEffectiveTier(user);
 
-  // Locked until Payment Gateway is integrated in 2-3 days
-  const handleUpgrade = (tierName) => {
-    toast.info(`Payment gateway integration in progress! ${tierName} plan will be available for purchase in a few days.`);
+  const handleUpgrade = async (plan) => {
+    if (!window.Razorpay) {
+      toast.error("Razorpay SDK failed to load. Please refresh the page and try again.");
+      return;
+    }
+
+    setProcessingTier(plan.tier);
+
+    try {
+      // 1. Create order on backend
+      const res = await api.post("/payment/create-order", { tier: plan.tier });
+      const { orderId, amount, currency, keyId } = res.data;
+
+      // 2. Open Razorpay Checkout modal
+      const options = {
+        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount,
+        currency: currency || "INR",
+        name: "Library Management",
+        description: `${plan.name} Membership Plan (${plan.durationMonths} Months)`,
+        order_id: orderId,
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+        },
+        theme: {
+          color: plan.tier === "ultimate" ? "#f59e0b" : "#5b3df5",
+        },
+        handler: async function (response) {
+          try {
+            // 3. Verify signature on backend
+            const verifyRes = await api.post("/payment/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              tier: plan.tier,
+            });
+
+            toast.success(verifyRes.data.message || `Upgraded to ${plan.name} successfully!`);
+            
+            // Refresh global user state & notify sidebar quota
+            await refreshUser();
+            window.dispatchEvent(new Event("quota-updated"));
+            
+            onClose();
+          } catch (err) {
+            toast.error(getErrorMessage(err));
+          } finally {
+            setProcessingTier(null);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setProcessingTier(null);
+          },
+        },
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.on("payment.failed", function (response) {
+        toast.error(`Payment failed: ${response.error?.description || "Something went wrong"}`);
+        setProcessingTier(null);
+      });
+
+      razorpayInstance.open();
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+      setProcessingTier(null);
+    }
   };
 
   return (
@@ -50,6 +119,7 @@ export default function MembershipModal({ onClose }) {
       >
         {Object.values(MEMBERSHIP_TIERS).map((plan) => {
           const isCurrent = currentTier.tier === plan.tier;
+          const isProcessing = processingTier === plan.tier;
 
           return (
             <div
@@ -132,7 +202,8 @@ export default function MembershipModal({ onClose }) {
               ) : (
                 <button
                   className="btn"
-                  onClick={() => handleUpgrade(plan.name)}
+                  onClick={() => handleUpgrade(plan)}
+                  disabled={isProcessing}
                   style={{
                     width: "100%",
                     background:
@@ -143,7 +214,7 @@ export default function MembershipModal({ onClose }) {
                     fontWeight: 600,
                   }}
                 >
-                  Upgrade (Coming Soon)
+                  {isProcessing ? "Opening Checkout..." : `Upgrade to ${plan.name}`}
                 </button>
               )}
             </div>
