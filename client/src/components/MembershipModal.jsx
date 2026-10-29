@@ -23,9 +23,12 @@ export default function MembershipModal({ onClose }) {
     setProcessingTier(plan.tier);
 
     try {
-      // 1. Create order on backend
+      // 1. Create order on backend (DB me pending transaction banti hai)
       const res = await api.post("/payment/create-order", { tier: plan.tier });
       const { orderId, amount, currency, keyId } = res.data;
+
+      // Real-time signal: History me pending show ho sake
+      window.dispatchEvent(new Event("quota-updated"));
 
       // 2. Open Razorpay Checkout modal
       const options = {
@@ -44,7 +47,7 @@ export default function MembershipModal({ onClose }) {
         },
         handler: async function (response) {
           try {
-            // 3. Verify signature on backend
+            // 3. Verify signature on backend (DB me status: success)
             const verifyRes = await api.post("/payment/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
@@ -54,7 +57,7 @@ export default function MembershipModal({ onClose }) {
 
             toast.success(verifyRes.data.message || `Upgraded to ${plan.name} successfully!`);
             
-            // Refresh global user state & notify sidebar quota
+            // Refresh user and instantly update transaction table
             await refreshUser();
             window.dispatchEvent(new Event("quota-updated"));
             
@@ -65,16 +68,42 @@ export default function MembershipModal({ onClose }) {
             setProcessingTier(null);
           }
         },
-        modal: {
-          ondismiss: function () {
+                modal: {
+          ondismiss: async function () {
+            try {
+              // Popup close hote hi backend me 'failed' mark karo
+              await api.post("/payment/mark-failed", {
+                orderId: orderId,
+                reason: "Payment cancelled / closed by user",
+              });
+            } catch {
+              // ignore
+            }
+            // Screen par turant Failed dikhane ke liye signal bhejo
+            window.dispatchEvent(new Event("quota-updated"));
             setProcessingTier(null);
           },
         },
       };
 
       const razorpayInstance = new window.Razorpay(options);
-      razorpayInstance.on("payment.failed", function (response) {
+
+      // Jab payment fail ho (Wrong OTP / Bank decline)
+      razorpayInstance.on("payment.failed", async function (response) {
         toast.error(`Payment failed: ${response.error?.description || "Something went wrong"}`);
+        
+        try {
+          // Backend ko batao taaki status: 'failed' ho jaye bina refresh ke
+          await api.post("/payment/mark-failed", {
+            orderId: orderId,
+            reason: response.error?.description || "Bank declined transaction",
+          });
+        } catch {
+          // ignore
+        }
+
+        // Real-time signal: History me turant 'failed' dikhe bina refresh ke
+        window.dispatchEvent(new Event("quota-updated"));
         setProcessingTier(null);
       });
 

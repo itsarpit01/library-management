@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -34,6 +34,10 @@ export default function Profile() {
   const [activeBooksCount, setActiveBooksCount] = useState(0);
   const [activeRequestsCount, setActiveRequestsCount] = useState(0);
 
+  // Transaction History State
+  const [transactions, setTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+
   const [pw, setPw] = useState(emptyPw);
   const [pwErrors, setPwErrors] = useState({});
   const [pwFormError, setPwFormError] = useState("");
@@ -41,8 +45,18 @@ export default function Profile() {
 
   const tier = getEffectiveTier(user);
 
+  const loadTransactions = useCallback(() => {
+    if (user?.role !== "purchaser") return;
+    setLoadingTransactions(true);
+    api
+      .get("/payment/my-transactions")
+      .then((res) => setTransactions(Array.isArray(res.data) ? res.data : []))
+      .catch(() => {})
+      .finally(() => setLoadingTransactions(false));
+  }, [user?.role]);
+
   useEffect(() => {
-    // Load profile, active issued books, aur pending/counter_offered requests
+    // Load profile, active issued books, pending requests, and transactions
     Promise.all([
       api.get("/users/me"),
       api.get("/issues/my").catch(() => ({ data: [] })),
@@ -63,7 +77,16 @@ export default function Profile() {
         setActiveRequestsCount(activeReqs);
       })
       .catch((err) => toast.error(getErrorMessage(err)));
-  }, [toast]);
+
+    loadTransactions();
+
+    // Jab plan upgrade ho, toh transactions bhi auto-refresh hon
+    const onQuotaUpdated = () => {
+      loadTransactions();
+    };
+    window.addEventListener("quota-updated", onQuotaUpdated);
+    return () => window.removeEventListener("quota-updated", onQuotaUpdated);
+  }, [toast, loadTransactions]);
 
   const processAvatar = (file) => {
     if (!file) return;
@@ -411,7 +434,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Key Limits */}
+              {/* Key Limits & Validity Range */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "0.85rem", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--primary, #5c6bc0)" }}>
@@ -423,6 +446,19 @@ export default function Profile() {
                     {tier.tier === "ultimate" ? "All upcoming dates open" : `Up to ${tier.maxIssueDays} days`}
                   </span>
                 </div>
+
+                {user?.membership?.startedAt && tier.tier !== "free" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#4f46e5" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    <span><strong>Started On:</strong> {formatDate(user.membership.startedAt)}</span>
+                  </div>
+                )}
+
                 {user?.membership?.expiresAt && tier.tier !== "free" && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#d97706" }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -548,6 +584,92 @@ export default function Profile() {
           </div>
         </form>
       </div>
+
+      {/* Card 4: Payment & Membership Transaction History */}
+      {user.role === "purchaser" && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Payment & Membership History</h3>
+              <p style={{ margin: "2px 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
+                Track your membership purchases, payment status, and validity ranges.
+              </p>
+            </div>
+
+            {user.membership?.startedAt && tier.tier !== "free" && (
+              <span
+                className="badge"
+                style={{
+                  background: "rgba(99, 102, 241, 0.1)",
+                  color: "#4f46e5",
+                  fontWeight: 600,
+                  padding: "4px 12px",
+                }}
+              >
+                Current Active: {formatDate(user.membership.startedAt)} &rarr; {formatDate(user.membership.expiresAt)}
+              </span>
+            )}
+          </div>
+
+          {loadingTransactions ? (
+            <p className="empty">Loading payment history...</p>
+          ) : transactions.length === 0 ? (
+            <p className="empty">No payment transactions found yet.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ whiteSpace: "nowrap" }}>Date</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Plan</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Amount</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Status</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Validity Period</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Transaction ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx._id}>
+                      <td style={{ whiteSpace: "nowrap" }}>{formatDate(tx.createdAt)}</td>
+                      <td style={{ whiteSpace: "nowrap", textTransform: "capitalize" }}>
+                        <strong>{tx.tier}</strong>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>₹{tx.amount}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span
+                          className={`badge ${
+                            tx.status === "success"
+                              ? "badge-success"
+                              : tx.status === "failed"
+                              ? "badge-danger"
+                              : "badge-warning"
+                          }`}
+                          style={{ textTransform: "capitalize" }}
+                        >
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {tx.startDate && tx.endDate ? (
+                          <span>
+                            {formatDate(tx.startDate)} &rarr; {formatDate(tx.endDate)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap", fontSize: "0.82rem", color: "var(--text-secondary, #666)" }}>
+                        {tx.paymentId || tx.orderId}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {showCropper && rawAvatarSrc && (
         <ImageCropModal

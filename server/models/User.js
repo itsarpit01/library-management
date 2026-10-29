@@ -17,7 +17,11 @@ const userSchema = new mongoose.Schema(
         enum: ["free", "premium", "ultimate"],
         default: "free",
       },
-      expiresAt: {
+        startedAt: {
+        type: Date,
+        default: null,
+      },
+          expiresAt: {
         type: Date,
         default: null,
       },
