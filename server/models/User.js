@@ -4,7 +4,14 @@ const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true, minlength: 6 },
+    password: {
+      type: String,
+      required: function () {
+        return !this.googleId;
+      },
+      minlength: 6,
+    },
+    googleId: { type: String, default: null },
     role: {
       type: String,
       enum: ["librarian", "purchaser"],
@@ -17,11 +24,11 @@ const userSchema = new mongoose.Schema(
         enum: ["free", "premium", "ultimate"],
         default: "free",
       },
-        startedAt: {
+      startedAt: {
         type: Date,
         default: null,
       },
-          expiresAt: {
+      expiresAt: {
         type: Date,
         default: null,
       },

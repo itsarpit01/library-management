@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
@@ -6,7 +7,8 @@ import { formatDate } from "../utils/format";
 import IssueFormModal from "../components/IssueFormModal";
 import ReissueModal from "../components/ReissueModal";
 import Modal from "../components/Modal";
-import { PlusIcon, ReturnIcon } from "../components/Icons";
+import { PlusIcon, ReturnIcon, SearchIcon } from "../components/Icons";
+
 
 const TABS = [
   { key: "", label: "All" },
@@ -26,6 +28,36 @@ export default function LibrarianIssues() {
   const [toReturn, setToReturn] = useState(null);
   const [toReissue, setToReissue] = useState(null);
   const [returning, setReturning] = useState(false);
+
+  // ── Search & Date Range (client-side) ─────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const filteredIssues = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return issues.filter((i) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle  = i.book?.title?.toLowerCase().includes(q);
+        const matchAuthor = i.book?.author?.toLowerCase().includes(q);
+        const matchIsbn   = i.book?.isbn?.toLowerCase().includes(q);
+        const matchMember = i.member?.name?.toLowerCase().includes(q);
+        const matchEmail  = i.member?.email?.toLowerCase().includes(q);
+        if (!matchTitle && !matchAuthor && !matchIsbn && !matchMember && !matchEmail) return false;
+      }
+      if (startDate || endDate) {
+        const d    = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
+        const from = startDate || "1970-01-01";
+        const to   = endDate   || todayStr;
+        if (d < from || d > to) return false;
+      }
+      return true;
+    });
+  }, [issues, searchQuery, startDate, endDate]);
+
+  const clearDateRange = () => { setStartDate(""); setEndDate(""); };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const loadIssues = useCallback(async () => {
     setLoading(true);
@@ -193,9 +225,74 @@ export default function LibrarianIssues() {
         ))}
       </div>
 
+      {/* Search & Date Range Toolbar */}
+      <div
+        className="toolbar"
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          paddingBottom: 4,
+          marginBottom: 16,
+        }}
+      >
+        <div className="search-box" style={{ maxWidth: 260, minWidth: 180, flex: "0 1 260px" }}>
+          <SearchIcon size={16} />
+          <input
+            placeholder="Search book, member, ISBN..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "nowrap",
+            whiteSpace: "nowrap",
+            background: "var(--card-bg, #f9fafb)",
+            padding: "4px 8px",
+            borderRadius: 8,
+            border: "1px solid var(--border, #e5e7eb)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
+            title="Issue date from"
+          />
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
+            title="Issue date to (leave blank for today)"
+          />
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={clearDateRange}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary, #888)", padding: "0 2px", fontSize: 16, lineHeight: 1 }}
+              title="Clear date range"
+            >✕</button>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <p className="empty">Loading...</p>
-      ) : issues.length === 0 ? (
+      ) : filteredIssues.length === 0 ? (
         <p className="empty">No records found.</p>
       ) : (
         <div className="table-wrap">
@@ -213,7 +310,7 @@ export default function LibrarianIssues() {
               </tr>
             </thead>
             <tbody>
-              {issues.map((i) => (
+              {filteredIssues.map((i) => (
                 <tr key={i._id}>
                   <td>
                     {i.book?.title}

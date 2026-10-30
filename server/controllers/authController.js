@@ -200,3 +200,18 @@ export const resetPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+// GET /api/auth/google/callback
+export const googleCallback = (req, res) => {
+  try {
+    if (!req.user) {
+      return res.redirect("http://localhost:5173/login?error=auth_failed");
+    }
+
+    const token = generateToken(req.user);
+    res.cookie("token", token, cookieOptions);
+    res.redirect("http://localhost:5173");
+  } catch (error) {
+    console.error("Google callback error:", error);
+    res.redirect("http://localhost:5173/login?error=server_error");
+  }
+};

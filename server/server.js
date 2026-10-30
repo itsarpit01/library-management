@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import passport from "passport";
+import "./config/passport.js";
 import connectDB from "./config/db.js";
 import routes from "./routes/index.js";
 import { verifyMailer } from "./utils/mailer.js";
@@ -29,6 +31,7 @@ app.use(
 );
 
 app.use(cookieParser());
+app.use(passport.initialize());
 
 // Webhook raw-body capture ke sath JSON parser
 app.use(

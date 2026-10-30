@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
@@ -8,7 +9,8 @@ import { getEffectiveTier } from "../utils/membershipConfig";
 import { statusBadge } from "./PurchaserRequests";
 import Modal from "../components/Modal";
 import IssueFormModal from "../components/IssueFormModal";
-import { CheckIcon, XIcon } from "../components/Icons";
+import { CheckIcon, XIcon, SearchIcon } from "../components/Icons";
+
 
 const TABS = [
   { key: "", label: "All" },
@@ -32,6 +34,35 @@ export default function LibrarianRequests() {
   const [saving, setSaving] = useState(false);
 
   const [issueModalData, setIssueModalData] = useState(null);
+
+  // ── Search & Date Range (client-side) ─────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const filteredRequests = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return requests.filter((r) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = r.title?.toLowerCase().includes(q);
+        const matchAuthor = r.author?.toLowerCase().includes(q);
+        const matchMember = r.requestedBy?.name?.toLowerCase().includes(q);
+        const matchEmail  = r.requestedBy?.email?.toLowerCase().includes(q);
+        if (!matchTitle && !matchAuthor && !matchMember && !matchEmail) return false;
+      }
+      if (startDate || endDate) {
+        const d = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
+        const from = startDate || "1970-01-01";
+        const to   = endDate   || todayStr;
+        if (d < from || d > to) return false;
+      }
+      return true;
+    });
+  }, [requests, searchQuery, startDate, endDate]);
+
+  const clearDateRange = () => { setStartDate(""); setEndDate(""); };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,9 +269,74 @@ export default function LibrarianRequests() {
         ))}
       </div>
 
+      {/* Search & Date Range Toolbar */}
+      <div
+        className="toolbar"
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          paddingBottom: 4,
+          marginBottom: 16,
+        }}
+      >
+        <div className="search-box" style={{ maxWidth: 260, minWidth: 180, flex: "0 1 260px" }}>
+          <SearchIcon size={16} />
+          <input
+            placeholder="Search book, author, member..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "nowrap",
+            whiteSpace: "nowrap",
+            background: "var(--card-bg, #f9fafb)",
+            padding: "4px 8px",
+            borderRadius: 8,
+            border: "1px solid var(--border, #e5e7eb)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
+            title="Request date from"
+          />
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
+          <input
+            type="date"
+            className="toolbar-input"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
+            title="Request date to (leave blank for today)"
+          />
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={clearDateRange}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary, #888)", padding: "0 2px", fontSize: 16, lineHeight: 1 }}
+              title="Clear date range"
+            >✕</button>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <p className="empty">Loading...</p>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 ? (
         <p className="empty">No requests found.</p>
       ) : (
         <div className="table-wrap">
@@ -258,7 +354,7 @@ export default function LibrarianRequests() {
               </tr>
             </thead>
             <tbody>
-              {requests.map((r) => (
+              {filteredRequests.map((r) => (
                 <tr key={r._id}>
                   <td>
                     {r.title}
