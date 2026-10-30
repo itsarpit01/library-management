@@ -7,6 +7,38 @@ import { getUserTierConfig } from "../config/membershipConfig.js";
 import { endOfToday } from "../utils/dates.js";
 import { assertDueWithinTier, httpError } from "../services/issueService.js";
 
+// ── Reason validation (mirrors frontend Zod rules) ────────────────────────────
+const validateReason = (reason, res) => {
+  if (!reason || typeof reason !== "string") {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Reason is required" }] });
+    return false;
+  }
+  const t = reason.trim();
+  if (t.length < 10) {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Reason must be at least 10 characters" }] });
+    return false;
+  }
+  if (t.length > 500) {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Max 500 characters" }] });
+    return false;
+  }
+  if (!/[a-zA-Z]{2,}\s+[a-zA-Z]{2,}/.test(t)) {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Reason must contain at least two meaningful words" }] });
+    return false;
+  }
+  const specialCount = (t.match(/[^a-zA-Z0-9\s]/g) || []).length;
+  if (specialCount / t.length > 0.2) {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Reason contains too many special characters" }] });
+    return false;
+  }
+  if (/(.)\1{3,}/.test(t)) {
+    res.status(400).json({ message: "Validation failed", errors: [{ field: "reason", message: "Reason looks like random keyboard input — please describe your need clearly" }] });
+    return false;
+  }
+  return true;
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const checkId = (id, res) => {
   if (!mongoose.isValidObjectId(id)) {
     res.status(400).json({ message: "Invalid request id" });
@@ -65,6 +97,9 @@ export const createRequest = async (req, res) => {
   // GATE 2: Plan ke anusaar calendar days validation
   assertDueWithinTier(neededUntil, tierConfig);
 
+  // GATE 3: Reason validation
+  if (!validateReason(reason, res)) return;
+
   if (quantity > book.totalCopies) return quantityCapError(res, book.totalCopies);
 
   const request = await PurchaseRequest.create({
@@ -110,6 +145,9 @@ export const updateRequest = async (req, res) => {
   if (!book) return res.status(404).json({ message: "Book not found" });
 
   assertDueWithinTier(neededUntil, getUserTierConfig(user));
+
+  // Reason validation
+  if (!validateReason(reason, res)) return;
 
   if (quantity > book.totalCopies) return quantityCapError(res, book.totalCopies);
 

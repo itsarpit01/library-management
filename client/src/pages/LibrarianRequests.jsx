@@ -49,6 +49,19 @@ export default function LibrarianRequests() {
     load();
   }, [load]);
 
+  // Auto-refresh when librarian switches back to this tab
+  // (a purchaser may have submitted a new request while the librarian was on another tab)
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", load);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", load);
+    };
+  }, [load]);
+
+
   const openReview = (r) => {
     setSelected(r);
     setNote(r.reviewNote || "");

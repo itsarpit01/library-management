@@ -37,6 +37,18 @@ export default function PurchaserIssues() {
     load();
   }, [load]);
 
+  // Auto-refresh when user switches back to this tab
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", load);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", load);
+    };
+  }, [load]);
+
+
   // Filtered issues by Search & Date Range (From -> Today / To)
   const filteredIssues = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);

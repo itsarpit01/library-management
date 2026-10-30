@@ -87,6 +87,27 @@ export default function PurchaserBooks() {
     loadUserQuota();
   }, [loadBooks, loadUserQuota]);
 
+  // Re-check quota whenever:
+  // 1. Another page dispatches "quota-updated" (e.g. request submitted, cancelled)
+  // 2. User switches back to this tab (librarian may have rejected while tab was in bg)
+  useEffect(() => {
+    const onQuotaUpdated = () => loadUserQuota();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadUserQuota();
+    };
+
+    window.addEventListener("quota-updated", onQuotaUpdated);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onQuotaUpdated);
+
+    return () => {
+      window.removeEventListener("quota-updated", onQuotaUpdated);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onQuotaUpdated);
+    };
+  }, [loadUserQuota]);
+
+
   // Quota status check
   const isQuotaFull = tier.maxBooks !== Infinity && activeSlotsCount >= tier.maxBooks;
 

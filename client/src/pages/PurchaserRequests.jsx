@@ -56,6 +56,8 @@ export default function PurchaserRequests() {
       setRequests(Array.isArray(reqRes.data) ? reqRes.data : []);
       const issues = Array.isArray(issueRes.data) ? issueRes.data : [];
       setActiveIssuesCount(issues.filter((i) => i.status === "issued").length);
+      // Notify Browse Books to re-check quota (e.g. librarian may have rejected a request)
+      window.dispatchEvent(new Event("quota-updated"));
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -66,6 +68,18 @@ export default function PurchaserRequests() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-refresh when tab comes back into view (librarian may have acted while away)
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", load);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", load);
+    };
+  }, [load]);
+
 
   // Quota calculation
   const pendingCount = requests.filter((r) => ["pending", "counter_offered"].includes(r.status)).length;

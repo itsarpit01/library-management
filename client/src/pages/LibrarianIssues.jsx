@@ -44,6 +44,18 @@ export default function LibrarianIssues() {
     loadIssues();
   }, [loadIssues]);
 
+  // Auto-refresh when librarian switches back to this tab
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") loadIssues(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", loadIssues);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", loadIssues);
+    };
+  }, [loadIssues]);
+
+
   const handleIssued = () => {
     setShowForm(false);
     loadIssues();

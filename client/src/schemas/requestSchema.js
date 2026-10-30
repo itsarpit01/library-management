@@ -13,8 +13,26 @@ export const makeRequestFormSchema = (maxQty, maxDays) =>
     reason: z
       .string()
       .trim()
-      .min(5, "Reason must be at least 5 characters")
-      .max(500, "Max 500 characters"),
+      .min(10, "Reason must be at least 10 characters")
+      .max(500, "Max 500 characters")
+      // Must contain at least 2 real words (letters separated by a space)
+      .refine(
+        (val) => /[a-zA-Z]{2,}\s+[a-zA-Z]{2,}/.test(val),
+        "Reason must contain at least two meaningful words"
+      )
+      // No more than 20% special characters  (e.g. ^%%ER%^&%^%%%^ fails this)
+      .refine(
+        (val) => {
+          const specialCount = (val.match(/[^a-zA-Z0-9\s]/g) || []).length;
+          return specialCount / val.length <= 0.2;
+        },
+        "Reason contains too many special characters"
+      )
+      // No character repeated 4+ times in a row (e.g. "ssssss" fails)
+      .refine(
+        (val) => !/(.)\1{3,}/.test(val),
+        "Reason looks like random keyboard input — please describe your need clearly"
+      ),
   });
 
 export const reviewSchema = z.object({
