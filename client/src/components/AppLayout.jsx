@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
@@ -30,7 +31,7 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const location = useLocation(); // Har route change ko listen karega
+  const location = useLocation();
 
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -66,10 +67,7 @@ export default function AppLayout() {
     }
   }, [user?.role]);
 
-  // REAL-TIME AUTO SYNC:
-  // 1. Har page navigation par chalega (location.pathname)
-  // 2. Custom "quota-updated" event par turant chalega (0 ms delay)
-  // 3. Tab focus par chalega
+  // Real-time auto sync
   useEffect(() => {
     loadSidebarQuota();
 
@@ -201,6 +199,9 @@ export default function AppLayout() {
           <div className="topbar-right">
             <ThemeToggle />
 
+            {/* Pure SVG Notification Bell */}
+            <NotificationBell />
+
             {/* Topbar Plan Pill */}
             {user?.role === "purchaser" && (
               <button
@@ -261,6 +262,7 @@ export default function AppLayout() {
                 <span className="avatar">{user?.name?.[0]?.toUpperCase()}</span>
               )}
             </Link>
+
             <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>
               <LogoutIcon size={16} /> Logout
             </button>

@@ -7,19 +7,21 @@ import userRoutes from "./userRoutes.js";
 import purchaseRequestRoutes from "./purchaseRequestRoutes.js";
 import dashboardRoutes from "./dashboardRoutes.js";
 import paymentRoutes from "./paymentRoutes.js";
+import notificationRoutes from "./notificationRoutes.js";
 
 const router = express.Router();
 
 // Public routes (Auth & Razorpay Webhook)
 router.use("/auth", authRoutes);
-router.use("/payment", paymentRoutes); // <-- Webhook isme public hai, baki routes protected hain
+router.use("/payment", paymentRoutes);
 
-// Iske baad authenticated routes
+// Protected routes
 router.use(protect);
 router.use("/books", bookRoutes);
 router.use("/issues", issueRoutes);
 router.use("/users", userRoutes);
 router.use("/purchase-requests", purchaseRequestRoutes);
 router.use("/dashboard", dashboardRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

@@ -5,6 +5,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import passport from "passport";
 import "./config/passport.js";
+import { startRecurringJobs } from "./services/recurringService.js";
 import connectDB from "./config/db.js";
 import routes from "./routes/index.js";
 import { verifyMailer } from "./utils/mailer.js";
@@ -18,6 +19,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 connectDB();
 verifyMailer();
+startRecurringJobs();
 
 const app = express();
 

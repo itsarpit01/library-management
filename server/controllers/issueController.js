@@ -1,9 +1,13 @@
 import Issue from "../models/Issue.js";
 import Book from "../models/Book.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
+import Notification from "../models/Notification.js";
 import { calcFine, withOverdueInfo } from "../utils/fine.js";
-import { createIssue, reissueIssue, populateIssue, httpError } from "../services/issueService.js";
+import { createIssue, reissueIssue, populateIssue } from "../services/issueService.js";
 import { MAX_REISSUES } from "../utils/dates.js";
+import { sendNotification, notifyLibrarians } from "./notificationController.js";
+
+const formatDateStr = (date) => (date ? new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "");
 
 // POST /api/issues (librarian) body: { bookId, memberId, dueDate, requestId? }
 export const issueBook = async (req, res) => {
@@ -19,7 +23,18 @@ export const issueBook = async (req, res) => {
     );
   }
 
-  res.status(201).json(withOverdueInfo(issue));
+  const populated = await populateIssue(Issue.findById(issue._id));
+
+  // Purchaser ko notification
+  sendNotification({
+    userId: memberId,
+    title: "Book Issued",
+    message: `"${populated.book?.title || 'Book'}" has been issued to you. Due date: ${formatDateStr(dueDate)}.`,
+    type: "success",
+    link: "/purchaser/my-issues",
+  });
+
+  res.status(201).json(withOverdueInfo(populated));
 };
 
 // PATCH /api/issues/:id/request-reissue (purchaser) body: { dueDate }
@@ -40,6 +55,16 @@ export const requestReissue = async (req, res) => {
   await issue.save();
 
   const populated = await populateIssue(Issue.findById(issue._id));
+  const memberName = populated.member?.name || "A member";
+
+  // Librarians ko notification bhejo (member ka naam populated se aayega)
+  notifyLibrarians({
+    title: "New Reissue Request",
+    message: `${memberName} requested reissue for "${populated.book?.title || 'Book'}" until ${formatDateStr(dueDate)}.`,
+    type: "warning",
+    link: "/librarian/requests",
+  });
+
   res.json(withOverdueInfo(populated));
 };
 
@@ -56,6 +81,12 @@ export const cancelReissue = async (req, res) => {
   issue.reissueRequestedDate = null;
   await issue.save();
 
+  // Librarians ki pending reissue request notification ko automatically read mark kar do
+  await Notification.updateMany(
+    { title: "New Reissue Request", link: "/librarian/requests", read: false },
+    { read: true }
+  );
+
   const populated = await populateIssue(Issue.findById(issue._id));
   res.json(withOverdueInfo(populated));
 };
@@ -68,6 +99,23 @@ export const reissue = async (req, res) => {
     reissueRequested: false,
     reissueRequestedDate: null,
   });
+
+  const populated = await populateIssue(Issue.findById(issue._id));
+
+  // 1. Purchaser ko notification: Reissue Approved
+  sendNotification({
+    userId: populated.member?._id || populated.member,
+    title: "Reissue Approved",
+    message: `Your reissue request for "${populated.book?.title || 'Book'}" was approved! Extended until: ${formatDateStr(req.body.dueDate)}.`,
+    type: "success",
+    link: "/purchaser/my-issues",
+  });
+
+  // 2. Librarian side: Resolve hone par "New Reissue Request" notification ko read mark kar do
+  await Notification.updateMany(
+    { title: "New Reissue Request", link: "/librarian/requests", read: false },
+    { read: true }
+  );
 
   res.json(withOverdueInfo(issue));
 };
@@ -85,13 +133,28 @@ export const rejectReissue = async (req, res) => {
   await issue.save();
 
   const populated = await populateIssue(Issue.findById(issue._id));
+
+  // 1. Purchaser ko notification: Reissue Rejected
+  sendNotification({
+    userId: populated.member?._id || populated.member,
+    title: "Reissue Rejected",
+    message: `Your reissue request for "${populated.book?.title || 'Book'}" was rejected. Please return the book on time.`,
+    type: "danger",
+    link: "/purchaser/my-issues",
+  });
+
+  // 2. Librarian side: Notification read mark kar do
+  await Notification.updateMany(
+    { title: "New Reissue Request", link: "/librarian/requests", read: false },
+    { read: true }
+  );
+
   res.json(withOverdueInfo(populated));
 };
 
 // PATCH /api/issues/:id/return (librarian ya purchaser apna)
 export const returnBook = async (req, res) => {
   const query = { _id: req.params.id };
-  // Agar purchaser hai toh sirf apni hi book return kar sake
   if (req.user.role === "purchaser") {
     query.member = req.user.id;
   }
