@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { makeRequestFormSchema } from "../schemas/requestSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
-import { dateInput, toDateInput } from "../utils/format";
+import { dateInput, toDateInput, formatDate } from "../utils/format";
 import { getEffectiveTier } from "../utils/membershipConfig";
 import { statusBadge } from "../pages/PurchaserRequests";
 
@@ -155,10 +155,6 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
         });
         toast.success("Request submitted");
       }
-
-      // ⚡ Real-Time Signal: Sidebar aur App ko turant update karne ke liye
-      window.dispatchEvent(new Event("quota-updated"));
-
       onSaved();
     } catch (err) {
       const fe = getFieldErrors(err);
@@ -170,6 +166,7 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
   };
 
   const modalTitle = isEdit ? "Edit book request" : "Request a book";
+  const isApproved = existingActiveRequest?.status === "approved";
 
   return (
     <>
@@ -211,13 +208,13 @@ export default function RequestFormModal({ initial = {}, request, onClose, onSav
               style={{
                 padding: "12px 14px",
                 borderRadius: 8,
-                backgroundColor: "rgba(237, 108, 2, 0.1)",
-                border: "1px solid #ed6c02",
+                backgroundColor: isApproved ? "rgba(22, 163, 74, 0.1)" : "rgba(237, 108, 2, 0.1)",
+                border: isApproved ? "1px solid #16a34a" : "1px solid #ed6c02",
                 marginBottom: 16,
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <strong style={{ color: "#ed6c02", fontSize: 14 }}>
+                <strong style={{ color: isApproved ? "#15803d" : "#ed6c02", fontSize: 14 }}>
                   Active request or issue exists!
                 </strong>
                 {statusBadge(existingActiveRequest.status)}
