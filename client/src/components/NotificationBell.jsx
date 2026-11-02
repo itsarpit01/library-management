@@ -11,7 +11,6 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Request browser desktop push permission once
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
@@ -24,7 +23,6 @@ export default function NotificationBell() {
       setNotifications(res.data.notifications || []);
       const newUnread = res.data.unreadCount || 0;
 
-      // Agar naya notification aaya ho aur tab background me ho toh Desktop Push fire karein
       if (
         newUnread > unreadCount &&
         "Notification" in window &&
@@ -42,13 +40,13 @@ export default function NotificationBell() {
 
       setUnreadCount(newUnread);
     } catch {
-      // ignore silent fetch errors
+      // ignore
     }
   }, [unreadCount]);
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000); // Poll every 15s
+    const interval = setInterval(fetchNotifications, 15000);
 
     const onFocus = () => fetchNotifications();
     window.addEventListener("focus", onFocus);
@@ -61,7 +59,6 @@ export default function NotificationBell() {
     };
   }, [fetchNotifications]);
 
-  // Outside click closes dropdown
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -72,7 +69,7 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleMarkAsRead = async (id, link) => {
+  const handleNotificationClick = async (id, link) => {
     try {
       await api.patch(`/notifications/${id}/read`);
       setNotifications((prev) =>
@@ -88,11 +85,24 @@ export default function NotificationBell() {
     }
   };
 
-  const handleMarkAllRead = async () => {
+  // Single Notification Delete
+  const handleDeleteNotification = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await api.delete(`/notifications/${id}`);
+      setNotifications((prev) => prev.filter((n) => n._id !== id));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Clear All Notifications from card
+  const handleClearAll = async () => {
     setLoading(true);
     try {
-      await api.patch("/notifications/read-all");
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      await api.delete("/notifications/clear-all");
+      setNotifications([]);
       setUnreadCount(0);
     } catch {
       // ignore
@@ -111,7 +121,6 @@ export default function NotificationBell() {
 
   return (
     <div style={{ position: "relative" }} ref={dropdownRef}>
-      {/* Pure SVG Bell Icon Button */}
       <button
         type="button"
         className="icon-btn"
@@ -159,14 +168,13 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Floating Notification Dropdown */}
       {isOpen && (
         <div
           style={{
             position: "absolute",
             top: "calc(100% + 8px)",
             right: 0,
-            width: 340,
+            width: 350,
             maxHeight: 460,
             background: "var(--card-bg, #ffffff)",
             border: "1px solid var(--border, #e5e7eb)",
@@ -178,7 +186,7 @@ export default function NotificationBell() {
             overflow: "hidden",
           }}
         >
-          {/* Header */}
+          {/* Header with Clear All */}
           <div
             style={{
               display: "flex",
@@ -206,21 +214,22 @@ export default function NotificationBell() {
                 </span>
               )}
             </div>
-            {unreadCount > 0 && (
+            {notifications.length > 0 && (
               <button
                 type="button"
-                onClick={handleMarkAllRead}
+                onClick={handleClearAll}
                 disabled={loading}
                 style={{
                   background: "none",
                   border: "none",
-                  color: "var(--primary, #4f46e5)",
+                  color: "var(--text-secondary, #6b7280)",
                   fontSize: "0.78rem",
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
+                title="Clear all notifications"
               >
-                Mark all read
+                Clear all
               </button>
             )}
           </div>
@@ -235,7 +244,7 @@ export default function NotificationBell() {
               notifications.map((n) => (
                 <div
                   key={n._id}
-                  onClick={() => handleMarkAsRead(n._id, n.link)}
+                  onClick={() => handleNotificationClick(n._id, n.link)}
                   style={{
                     padding: "12px 16px",
                     borderBottom: "1px solid var(--border, #f3f4f6)",
@@ -245,9 +254,9 @@ export default function NotificationBell() {
                     gap: 10,
                     alignItems: "flex-start",
                     transition: "background 0.15s",
+                    position: "relative",
                   }}
                 >
-                  {/* Status Indicator Dot */}
                   <span
                     style={{
                       width: 8,
@@ -258,7 +267,7 @@ export default function NotificationBell() {
                       flexShrink: 0,
                     }}
                   />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: 18 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
                       <strong style={{ fontSize: "0.85rem", color: "var(--text, #111827)" }}>
                         {n.title}
@@ -271,6 +280,27 @@ export default function NotificationBell() {
                       {n.message}
                     </p>
                   </div>
+
+                  {/* Individual Delete [X] Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteNotification(e, n._id)}
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary, #9ca3af)",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      lineHeight: 1,
+                      padding: 2,
+                    }}
+                    title="Dismiss"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))
             )}

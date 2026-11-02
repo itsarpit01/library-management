@@ -44,6 +44,26 @@ export const markAllAsRead = async (req, res) => {
   }
 };
 
+// DELETE /api/notifications/:id (Single notification remove)
+export const deleteNotification = async (req, res) => {
+  try {
+    await Notification.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    res.json({ message: "Notification deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// DELETE /api/notifications/clear-all (Saari notifications card se saaf)
+export const clearAllNotifications = async (req, res) => {
+  try {
+    await Notification.deleteMany({ user: req.user.id });
+    res.json({ message: "All notifications cleared" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // Helper: Specific User ko notification bhejna
 export const sendNotification = async ({ userId, title, message, type = "info", link = "" }) => {
   try {

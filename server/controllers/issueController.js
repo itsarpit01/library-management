@@ -25,7 +25,6 @@ export const issueBook = async (req, res) => {
 
   const populated = await populateIssue(Issue.findById(issue._id));
 
-  // Purchaser ko notification
   sendNotification({
     userId: memberId,
     title: "Book Issued",
@@ -57,7 +56,6 @@ export const requestReissue = async (req, res) => {
   const populated = await populateIssue(Issue.findById(issue._id));
   const memberName = populated.member?.name || "A member";
 
-  // Librarians ko notification bhejo (member ka naam populated se aayega)
   notifyLibrarians({
     title: "New Reissue Request",
     message: `${memberName} requested reissue for "${populated.book?.title || 'Book'}" until ${formatDateStr(dueDate)}.`,
@@ -81,11 +79,11 @@ export const cancelReissue = async (req, res) => {
   issue.reissueRequestedDate = null;
   await issue.save();
 
-  // Librarians ki pending reissue request notification ko automatically read mark kar do
-  await Notification.updateMany(
-    { title: "New Reissue Request", link: "/librarian/requests", read: false },
-    { read: true }
-  );
+  // Cancel hote hi librarian ke notification card se hatt jayegi!
+  await Notification.deleteMany({
+    title: "New Reissue Request",
+    link: "/librarian/requests",
+  });
 
   const populated = await populateIssue(Issue.findById(issue._id));
   res.json(withOverdueInfo(populated));
@@ -102,7 +100,7 @@ export const reissue = async (req, res) => {
 
   const populated = await populateIssue(Issue.findById(issue._id));
 
-  // 1. Purchaser ko notification: Reissue Approved
+  // 1. Purchaser ko notification
   sendNotification({
     userId: populated.member?._id || populated.member,
     title: "Reissue Approved",
@@ -111,11 +109,11 @@ export const reissue = async (req, res) => {
     link: "/purchaser/my-issues",
   });
 
-  // 2. Librarian side: Resolve hone par "New Reissue Request" notification ko read mark kar do
-  await Notification.updateMany(
-    { title: "New Reissue Request", link: "/librarian/requests", read: false },
-    { read: true }
-  );
+  // 2. Resolve hote hi Librarian ke notification card se DELETE ho jayegi!
+  await Notification.deleteMany({
+    title: "New Reissue Request",
+    link: "/librarian/requests",
+  });
 
   res.json(withOverdueInfo(issue));
 };
@@ -134,7 +132,7 @@ export const rejectReissue = async (req, res) => {
 
   const populated = await populateIssue(Issue.findById(issue._id));
 
-  // 1. Purchaser ko notification: Reissue Rejected
+  // 1. Purchaser ko notification
   sendNotification({
     userId: populated.member?._id || populated.member,
     title: "Reissue Rejected",
@@ -143,11 +141,11 @@ export const rejectReissue = async (req, res) => {
     link: "/purchaser/my-issues",
   });
 
-  // 2. Librarian side: Notification read mark kar do
-  await Notification.updateMany(
-    { title: "New Reissue Request", link: "/librarian/requests", read: false },
-    { read: true }
-  );
+  // 2. Reject hote hi Librarian ke notification card se DELETE ho jayegi!
+  await Notification.deleteMany({
+    title: "New Reissue Request",
+    link: "/librarian/requests",
+  });
 
   res.json(withOverdueInfo(populated));
 };
