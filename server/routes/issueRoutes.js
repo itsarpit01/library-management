@@ -6,6 +6,7 @@ import {
   getIssues,
   getMyIssues,
   requestReissue,
+  cancelReissue,
 } from "../controllers/issueController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -27,6 +28,12 @@ router.patch(
   validate(issueIdParamSchema, "params"),
   validate(reissueSchema),
   requestReissue
+);
+router.patch(
+  "/:id/cancel-reissue",
+  authorizeRoles("purchaser"),
+  validate(issueIdParamSchema, "params"),
+  cancelReissue
 );
 
 // Return route: Available to both Librarian & Purchaser (controller guards ownership)

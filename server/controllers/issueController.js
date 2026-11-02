@@ -54,6 +54,22 @@ export const reissue = async (req, res) => {
 
   res.json(withOverdueInfo(issue));
 };
+// PATCH /api/issues/:id/cancel-reissue (purchaser cancels pending reissue request)
+export const cancelReissue = async (req, res) => {
+  const issue = await Issue.findOne({ _id: req.params.id, member: req.user.id });
+
+  if (!issue) return res.status(404).json({ message: "Issue record not found" });
+  if (!issue.reissueRequested) {
+    return res.status(400).json({ message: "No pending reissue request found for this book" });
+  }
+
+  issue.reissueRequested = false;
+  issue.reissueRequestedDate = null;
+  await issue.save();
+
+  const populated = await populateIssue(Issue.findById(issue._id));
+  res.json(withOverdueInfo(populated));
+};
 
 // PATCH /api/issues/:id/return (librarian ya purchaser apna)
 export const returnBook = async (req, res) => {
