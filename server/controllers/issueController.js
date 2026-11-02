@@ -43,7 +43,24 @@ export const requestReissue = async (req, res) => {
   res.json(withOverdueInfo(populated));
 };
 
-// PATCH /api/issues/:id/reissue (librarian) body: { dueDate }
+// PATCH /api/issues/:id/cancel-reissue (purchaser cancels pending reissue request)
+export const cancelReissue = async (req, res) => {
+  const issue = await Issue.findOne({ _id: req.params.id, member: req.user.id });
+
+  if (!issue) return res.status(404).json({ message: "Issue record not found" });
+  if (!issue.reissueRequested) {
+    return res.status(400).json({ message: "No pending reissue request found for this book" });
+  }
+
+  issue.reissueRequested = false;
+  issue.reissueRequestedDate = null;
+  await issue.save();
+
+  const populated = await populateIssue(Issue.findById(issue._id));
+  res.json(withOverdueInfo(populated));
+};
+
+// PATCH /api/issues/:id/reissue (librarian approves reissue) body: { dueDate }
 export const reissue = async (req, res) => {
   const issue = await reissueIssue({ issueId: req.params.id, dueDate: req.body.dueDate });
   
@@ -54,13 +71,13 @@ export const reissue = async (req, res) => {
 
   res.json(withOverdueInfo(issue));
 };
-// PATCH /api/issues/:id/cancel-reissue (purchaser cancels pending reissue request)
-export const cancelReissue = async (req, res) => {
-  const issue = await Issue.findOne({ _id: req.params.id, member: req.user.id });
 
+// PATCH /api/issues/:id/reject-reissue (librarian rejects reissue request)
+export const rejectReissue = async (req, res) => {
+  const issue = await Issue.findById(req.params.id);
   if (!issue) return res.status(404).json({ message: "Issue record not found" });
   if (!issue.reissueRequested) {
-    return res.status(400).json({ message: "No pending reissue request found for this book" });
+    return res.status(400).json({ message: "No pending reissue request to reject" });
   }
 
   issue.reissueRequested = false;
@@ -100,15 +117,20 @@ export const returnBook = async (req, res) => {
   res.json(withOverdueInfo(populated));
 };
 
-// GET /api/issues?status=issued|returned|overdue (librarian)
+// GET /api/issues?status=issued|returned|overdue|reissue_requested&reissueRequested=true (librarian)
 export const getIssues = async (req, res) => {
-  const { status } = req.query;
+  const { status, reissueRequested } = req.query;
   const filter = {};
 
-  if (status === "issued" || status === "returned") filter.status = status;
-  if (status === "overdue") {
+  if (status === "reissue_requested" || reissueRequested === "true") {
     filter.status = "issued";
-    filter.dueDate = { $lt: new Date() };
+    filter.reissueRequested = true;
+  } else {
+    if (status === "issued" || status === "returned") filter.status = status;
+    if (status === "overdue") {
+      filter.status = "issued";
+      filter.dueDate = { $lt: new Date() };
+    }
   }
 
   const issues = await populateIssue(Issue.find(filter).sort({ createdAt: -1 }));

@@ -7,6 +7,7 @@ import {
   getMyIssues,
   requestReissue,
   cancelReissue,
+  rejectReissue,
 } from "../controllers/issueController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -52,6 +53,12 @@ router.patch(
   validate(issueIdParamSchema, "params"),
   validate(reissueSchema),
   reissue
+);
+router.patch(
+  "/:id/reject-reissue",
+  authorizeRoles("librarian"),
+  validate(issueIdParamSchema, "params"),
+  rejectReissue
 );
 
 export default router;

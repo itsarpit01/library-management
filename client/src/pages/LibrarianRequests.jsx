@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
-
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
@@ -11,7 +10,6 @@ import Modal from "../components/Modal";
 import IssueFormModal from "../components/IssueFormModal";
 import { CheckIcon, XIcon, SearchIcon } from "../components/Icons";
 
-
 const TABS = [
   { key: "", label: "All" },
   { key: "pending", label: "Pending" },
@@ -22,10 +20,12 @@ const TABS = [
 
 export default function LibrarianRequests() {
   const toast = useToast();
+
   const [requests, setRequests] = useState([]);
   const [tab, setTab] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Normal request review
   const [selected, setSelected] = useState(null);
   const [note, setNote] = useState("");
   const [proposedDate, setProposedDate] = useState("");
@@ -33,42 +33,61 @@ export default function LibrarianRequests() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Reissue review
+  const [selectedReissue, setSelectedReissue] = useState(null);
+  const [reissueDueDate, setReissueDueDate] = useState("");
+  const [reissueSaving, setReissueSaving] = useState(false);
+  const [reissueError, setReissueError] = useState("");
+
   const [issueModalData, setIssueModalData] = useState(null);
 
-  // ── Search & Date Range (client-side) ─────────────────────────────────────
+  // Search & Date Range
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const filteredRequests = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return requests.filter((r) => {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = r.title?.toLowerCase().includes(q);
-        const matchAuthor = r.author?.toLowerCase().includes(q);
-        const matchMember = r.requestedBy?.name?.toLowerCase().includes(q);
-        const matchEmail  = r.requestedBy?.email?.toLowerCase().includes(q);
-        if (!matchTitle && !matchAuthor && !matchMember && !matchEmail) return false;
-      }
-      if (startDate || endDate) {
-        const d = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
-        const from = startDate || "1970-01-01";
-        const to   = endDate   || todayStr;
-        if (d < from || d > to) return false;
-      }
-      return true;
-    });
-  }, [requests, searchQuery, startDate, endDate]);
-
-  const clearDateRange = () => { setStartDate(""); setEndDate(""); };
-  // ──────────────────────────────────────────────────────────────────────────
-
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/purchase-requests", { params: tab ? { status: tab } : {} });
-      setRequests(res.data);
+      // Fetch both book requests & pending reissues in parallel
+      const [reqRes, reissueRes] = await Promise.all([
+        api.get("/purchase-requests", { params: tab && tab !== "pending" ? { status: tab } : {} }),
+        api.get("/issues", { params: { reissueRequested: true } }),
+      ]);
+
+      const rawRequests = Array.isArray(reqRes.data) ? reqRes.data : [];
+      const rawReissues = Array.isArray(reissueRes.data) ? reissueRes.data : [];
+
+      // Reissues ko standard request format me map karke same table me lana
+      const mappedReissues = rawReissues.map((i) => ({
+        _id: i._id,
+        isReissue: true,
+        issueRaw: i,
+        title: i.book?.title,
+        author: i.book?.author,
+        isbn: i.book?.isbn,
+        requestedBy: i.member,
+        quantity: 1,
+        neededUntil: i.reissueRequestedDate,
+        currentDueDate: i.dueDate,
+        reissueCount: i.reissueCount || 0,
+        createdAt: i.reissueRequestedDate || i.updatedAt || i.createdAt,
+        status: "reissue_pending",
+      }));
+
+      // Filter by tab
+      let combined = [];
+      if (tab === "pending") {
+        const pendingBookReqs = rawRequests.filter((r) => r.status === "pending");
+        combined = [...mappedReissues, ...pendingBookReqs];
+      } else if (tab === "") {
+        combined = [...mappedReissues, ...rawRequests];
+      } else {
+        // counter_offered, approved, rejected
+        combined = rawRequests.filter((r) => r.status === tab);
+      }
+
+      setRequests(combined);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -77,22 +96,50 @@ export default function LibrarianRequests() {
   }, [tab, toast]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadData();
+  }, [loadData]);
 
-  // Auto-refresh when librarian switches back to this tab
-  // (a purchaser may have submitted a new request while the librarian was on another tab)
+  // Tab switch par auto-refresh
   useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") load(); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadData();
+    };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", load);
+    window.addEventListener("focus", loadData);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", load);
+      window.removeEventListener("focus", loadData);
     };
-  }, [load]);
+  }, [loadData]);
 
+  // Client-side search and date range
+  const filteredRequests = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return requests.filter((r) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = r.title?.toLowerCase().includes(q);
+        const matchAuthor = r.author?.toLowerCase().includes(q);
+        const matchMember = r.requestedBy?.name?.toLowerCase().includes(q);
+        const matchEmail = r.requestedBy?.email?.toLowerCase().includes(q);
+        if (!matchTitle && !matchAuthor && !matchMember && !matchEmail) return false;
+      }
+      if (startDate || endDate) {
+        const d = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
+        const from = startDate || "1970-01-01";
+        const to = endDate || todayStr;
+        if (d < from || d > to) return false;
+      }
+      return true;
+    });
+  }, [requests, searchQuery, startDate, endDate]);
 
+  const clearDateRange = () => {
+    setStartDate("");
+    setEndDate("");
+  };
+
+  // Normal book request open
   const openReview = (r) => {
     setSelected(r);
     setNote(r.reviewNote || "");
@@ -107,15 +154,52 @@ export default function LibrarianRequests() {
     setFormError("");
   };
 
-  // Requesting member ka membership tier
-  const memberTier = getEffectiveTier(selected?.requestedBy);
+  // Reissue request open
+  const openReissueReview = (r) => {
+    setSelectedReissue(r);
+    setReissueDueDate(r.neededUntil ? toDateInput(r.neededUntil) : dateInput(7));
+    setReissueError("");
+  };
 
-  // Date matching validation
+  const handleApproveReissue = async () => {
+    if (!reissueDueDate) {
+      setReissueError("Please select a valid return due date");
+      return;
+    }
+    setReissueSaving(true);
+    setReissueError("");
+    try {
+      await api.patch(`/issues/${selectedReissue._id}/reissue`, { dueDate: reissueDueDate });
+      toast.success("Reissue request approved! Book extended.");
+      setSelectedReissue(null);
+      loadData();
+    } catch (err) {
+      setReissueError(getErrorMessage(err, "Failed to approve reissue"));
+    } finally {
+      setReissueSaving(false);
+    }
+  };
+
+  const handleRejectReissue = async () => {
+    if (!window.confirm("Are you sure you want to reject this reissue request?")) return;
+    setReissueSaving(true);
+    setReissueError("");
+    try {
+      await api.patch(`/issues/${selectedReissue._id}/reject-reissue`);
+      toast.success("Reissue request rejected");
+      setSelectedReissue(null);
+      loadData();
+    } catch (err) {
+      setReissueError(getErrorMessage(err, "Failed to reject reissue"));
+    } finally {
+      setReissueSaving(false);
+    }
+  };
+
+  const memberTier = getEffectiveTier(selected?.requestedBy);
   const userNeededDate = selected?.neededUntil ? toDateInput(selected.neededUntil) : "";
   const isDateMismatch = Boolean(selected && proposedDate && userNeededDate && proposedDate !== userNeededDate);
   const isCounterOffered = selected?.status === "counter_offered";
-
-  // Approve tabhi allow hoga jab: not saving, not counter_offered, AUR dono dates exactly match karein
   const canApprove = !saving && !isCounterOffered && !isDateMismatch;
 
   const review = async (status) => {
@@ -158,7 +242,7 @@ export default function LibrarianRequests() {
 
       const approvedReq = selected;
       setSelected(null);
-      load();
+      loadData();
 
       if (status === "approved") {
         setIssueModalData({
@@ -184,7 +268,6 @@ export default function LibrarianRequests() {
     }
   };
 
-  // Helper: Member Tier Badge (0 Emojis, clean SVGs)
   const renderTierBadge = (membership) => {
     const tier = membership?.tier || "free";
     if (tier === "ultimate") {
@@ -202,9 +285,6 @@ export default function LibrarianRequests() {
             gap: 4,
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-          </svg>
           Ultimate
         </span>
       );
@@ -224,9 +304,6 @@ export default function LibrarianRequests() {
             gap: 4,
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
           Premium
         </span>
       );
@@ -252,10 +329,11 @@ export default function LibrarianRequests() {
       <div className="page-head">
         <div>
           <h2>Requests</h2>
-          <p>Review book requests from members.</p>
+          <p>Review book requests and reissue requests from members.</p>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="tabs">
         {TABS.map((t) => (
           <button
@@ -312,7 +390,7 @@ export default function LibrarianRequests() {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Request date from"
+            title="Start date filter"
           />
           <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
           <input
@@ -321,21 +399,31 @@ export default function LibrarianRequests() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Request date to (leave blank for today)"
+            title="End date filter"
           />
           {(startDate || endDate) && (
             <button
               type="button"
               onClick={clearDateRange}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary, #888)", padding: "0 2px", fontSize: 16, lineHeight: 1 }}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--text-secondary, #888)",
+                padding: "0 2px",
+                fontSize: 16,
+                lineHeight: 1,
+              }}
               title="Clear date range"
-            >✕</button>
+            >
+              ✕
+            </button>
           )}
         </div>
       </div>
 
       {loading ? (
-        <p className="empty">Loading...</p>
+        <p className="empty">Loading requests...</p>
       ) : filteredRequests.length === 0 ? (
         <p className="empty">No requests found.</p>
       ) : (
@@ -355,9 +443,26 @@ export default function LibrarianRequests() {
             </thead>
             <tbody>
               {filteredRequests.map((r) => (
-                <tr key={r._id}>
+                <tr key={r.isReissue ? `reissue-${r._id}` : r._id}>
                   <td>
-                    {r.title}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <strong>{r.title}</strong>
+                      {r.isReissue && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: "#fff7ed",
+                            color: "#c2410c",
+                            border: "1px solid #fdba74",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                          }}
+                        >
+                          Reissue
+                        </span>
+                      )}
+                    </div>
                     <span className="cell-sub">{r.author}</span>
                   </td>
                   <td>
@@ -368,14 +473,62 @@ export default function LibrarianRequests() {
                     <span className="cell-sub">{r.requestedBy?.email}</span>
                   </td>
                   <td>{r.quantity}</td>
-                  <td>{formatDate(r.neededUntil)}</td>
-                  <td>{r.proposedDate ? formatDate(r.proposedDate) : "-"}</td>
-                  <td>{formatDate(r.createdAt)}</td>
-                  <td>{statusBadge(r.status)}</td>
                   <td>
-                    <button className="btn btn-soft btn-sm" onClick={() => openReview(r)}>
-                      {r.status === "pending" || r.status === "counter_offered" ? "Review" : "View"}
-                    </button>
+                    {formatDate(r.neededUntil)}
+                    {r.isReissue && (
+                      <div style={{ fontSize: "0.72rem", color: "#c2410c", fontWeight: 600 }}>
+                        (Extended)
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {r.isReissue ? (
+                      <span style={{ fontSize: "0.82rem", color: "var(--text-secondary, #6b7280)" }}>
+                        Due: {formatDate(r.currentDueDate)}
+                      </span>
+                    ) : r.proposedDate ? (
+                      formatDate(r.proposedDate)
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>{formatDate(r.createdAt)}</td>
+                  <td>
+                    {r.isReissue ? (
+                      <span
+                        className="badge"
+                        style={{
+                          background: "#fff7ed",
+                          color: "#c2410c",
+                          border: "1px solid #fdba74",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Pending Reissue
+                      </span>
+                    ) : (
+                      statusBadge(r.status)
+                    )}
+                  </td>
+                  <td>
+                    {r.isReissue ? (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => openReissueReview(r)}
+                        style={{
+                          background: "#ea580c",
+                          color: "#fff",
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Review
+                      </button>
+                    ) : (
+                      <button className="btn btn-soft btn-sm" onClick={() => openReview(r)}>
+                        {r.status === "pending" || r.status === "counter_offered" ? "Review" : "View"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -384,6 +537,68 @@ export default function LibrarianRequests() {
         </div>
       )}
 
+      {/* Reissue Review Modal */}
+      {selectedReissue && (
+        <Modal title="Review Reissue Request" onClose={() => setSelectedReissue(null)}>
+          {reissueError && <div className="alert-error">{reissueError}</div>}
+
+          <div className="detail-list">
+            <p><span>Type</span><strong style={{ color: "#c2410c" }}>Book Reissue Request</strong></p>
+            <p><span>Book Title</span>{selectedReissue.title}</p>
+            <p><span>Author</span>{selectedReissue.author}</p>
+            <p>
+              <span>Requested by</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {selectedReissue.requestedBy?.name}
+                {renderTierBadge(selectedReissue.requestedBy?.membership)}
+              </span>
+            </p>
+            <p><span>Current Due Date</span>{formatDate(selectedReissue.currentDueDate)}</p>
+            <p>
+              <span>Requested Extended Date</span>
+              <strong style={{ color: "#ea580c" }}>{formatDate(selectedReissue.neededUntil)}</strong>
+            </p>
+            <p><span>Reissues Used</span>{selectedReissue.reissueCount}/2 used</p>
+          </div>
+
+          <div className="field" style={{ marginTop: 14 }}>
+            <label htmlFor="reissueDueDate">Approve with New Due Date</label>
+            <input
+              id="reissueDueDate"
+              type="date"
+              min={dateInput(1)}
+              value={reissueDueDate}
+              onChange={(e) => setReissueDueDate(e.target.value)}
+            />
+            <span className="hint">
+              Member requested until: <strong>{formatDate(selectedReissue.neededUntil)}</strong>. You can accept this or adjust the return date.
+            </span>
+          </div>
+
+          <div className="modal-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleRejectReissue}
+              disabled={reissueSaving}
+              style={{ color: "#ef4444", borderColor: "#ef4444" }}
+            >
+              <XIcon size={16} /> Reject
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={handleApproveReissue}
+              disabled={reissueSaving}
+              style={{ background: "#ea580c", color: "#fff" }}
+            >
+              <CheckIcon size={16} /> {reissueSaving ? "Approving..." : "Approve Reissue"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Standard Book Request Review Modal */}
       {selected && (
         <Modal title="Purchase request" onClose={() => setSelected(null)}>
           {formError && <div className="alert-error">{formError}</div>}
@@ -441,11 +656,6 @@ export default function LibrarianRequests() {
                         fontSize: "0.85rem",
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="12" />
-                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                      </svg>
                       Date mismatch: Click <strong>"Propose Date"</strong> to negotiate with the user first.
                     </span>
                   )}
@@ -453,65 +663,54 @@ export default function LibrarianRequests() {
               </div>
 
               <div className="field">
-                <label htmlFor="note">Note to member (optional)</label>
+                <label htmlFor="note">Review note (optional)</label>
                 <textarea
                   id="note"
                   rows={3}
+                  placeholder="e.g. Approved with proposed date, or reason for rejection"
                   value={note}
-                  onChange={(e) => {
-                    setNote(e.target.value);
-                    setNoteError("");
-                  }}
-                  placeholder="e.g., Can only issue till this date due to high demand."
+                  onChange={(e) => setNote(e.target.value)}
                 />
                 {noteError && <span className="error-text">{noteError}</span>}
               </div>
 
-              {isCounterOffered && (
-                <p
-                  className="hint"
-                  style={{
-                    color: "#ed6c02",
-                    marginBottom: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
+              <div className="modal-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => review("rejected")}
+                  disabled={saving}
+                  style={{ color: "#ef4444", borderColor: "#ef4444" }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  Counter-offer is active. Waiting for member to accept or edit their request before issuing.
-                </p>
-              )}
-
-              <div className="modal-actions" style={{ flexWrap: "wrap", gap: 8 }}>
-                <button className="btn btn-danger" onClick={() => review("rejected")} disabled={saving}>
                   <XIcon size={16} /> Reject
                 </button>
+
+                {isDateMismatch && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => review("counter_offered")}
+                    disabled={saving}
+                    style={{ background: "#f59e0b", color: "#fff", borderColor: "#f59e0b" }}
+                  >
+                    Propose Date
+                  </button>
+                )}
+
                 <button
-                  className="btn btn-soft"
-                  onClick={() => review("counter_offered")}
-                  disabled={saving || !isDateMismatch}
-                  title={!isDateMismatch ? "Date matches requested date. Choose a different date to propose." : "Send counter offer with alternate date"}
-                >
-                  Propose Date
-                </button>
-                <button
+                  type="button"
                   className="btn"
                   onClick={() => review("approved")}
                   disabled={!canApprove}
                   title={
-                    isCounterOffered
-                      ? "Cannot issue while counter offer is pending user acceptance"
-                      : isDateMismatch
-                      ? "Dates do not match. Propose alternate date to user first."
-                      : "Approve and issue"
+                    isDateMismatch
+                      ? "Cannot approve while proposed date differs from member date. Propose alternate date first."
+                      : isCounterOffered
+                      ? "Waiting for member to accept or reject counter offer."
+                      : "Approve and open issue form"
                   }
                 >
-                  <CheckIcon size={16} /> Approve & Issue
+                  <CheckIcon size={16} /> {saving ? "Saving..." : "Approve"}
                 </button>
               </div>
             </>
@@ -525,13 +724,14 @@ export default function LibrarianRequests() {
         </Modal>
       )}
 
+      {/* Book Issue Form Modal (After Book Request Approved) */}
       {issueModalData && (
         <IssueFormModal
-          initial={issueModalData}
+          initialData={issueModalData}
           onClose={() => setIssueModalData(null)}
-          onSaved={() => {
+          onIssued={() => {
             setIssueModalData(null);
-            load();
+            loadData();
           }}
         />
       )}
