@@ -151,12 +151,12 @@ export const rejectReissue = async (req, res) => {
 };
 
 // PATCH /api/issues/:id/return (librarian ya purchaser apna)
+// PATCH /api/issues/:id/return (librarian or purchaser returning own book)
 export const returnBook = async (req, res) => {
   const query = { _id: req.params.id };
-  if (req.user.role === "purchaser") {
+  if (req.user?.role === "purchaser") {
     query.member = req.user.id;
   }
-
   const issue = await Issue.findOne(query);
   if (!issue) return res.status(404).json({ message: "Issue record not found" });
   if (issue.status === "returned") {
@@ -167,12 +167,30 @@ export const returnBook = async (req, res) => {
 
   const updated = await Issue.findOneAndUpdate(
     { _id: issue._id, status: "issued" },
-    { status: "returned", returnDate: now, fine: calcFine(issue.dueDate, now), reissueRequested: false },
+    {
+      status: "returned",
+      returnDate: now,
+      fine: calcFine(issue.dueDate, now),
+      reissueRequested: false,
+      reissueRequestedDate: null,
+    },
     { new: true }
   );
   if (!updated) return res.status(400).json({ message: "Book already returned" });
 
   await Book.findByIdAndUpdate(issue.book, { $inc: { availableCopies: 1 } });
+
+  // Clean up any pending notifications for this issue
+  try {
+    await Notification.deleteMany({
+      $or: [
+        { link: `/issues?id=${issue._id}` },
+        { link: `/requests?issueId=${issue._id}` },
+      ],
+    });
+  } catch (notifErr) {
+    // Ignore notification deletion errors
+  }
 
   const populated = await populateIssue(Issue.findById(updated._id));
   res.json(withOverdueInfo(populated));

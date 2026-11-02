@@ -4,14 +4,15 @@ const handler = (message) => (req, res) =>
   res.status(429).json({ message });
 
 // Poori API par: 15 minute mein 300 requests per IP
+// server/middleware/rateLimiter.js (Line 7-13)
+
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: Number(process.env.RATE_LIMIT_MAX) || 300,
+  limit: Number(process.env.RATE_LIMIT_MAX) || 5000, // <-- 300 se bada kar 5000 kar diya
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: handler("Too many requests, please try again later"),
 });
-
 // Login: 15 minute mein 10 galat attempts (successful login count nahi hota)
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

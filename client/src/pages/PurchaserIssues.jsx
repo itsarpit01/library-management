@@ -4,14 +4,17 @@ import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import ReissueModal from "../components/ReissueModal";
-import { SearchIcon } from "../components/Icons";
+import Modal from "../components/Modal";
+import { SearchIcon, ReturnIcon } from "../components/Icons";
 
 export default function PurchaserIssues() {
   const toast = useToast();
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toReissue, setToReissue] = useState(null);
+  const [toReturn, setToReturn] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [returning, setReturning] = useState(false);
 
   // Search, Status, and Date Range Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +63,28 @@ export default function PurchaserIssues() {
       toast.error(getErrorMessage(err, "Failed to cancel reissue request"));
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  // Return Book Handler
+  const confirmReturn = async () => {
+    if (!toReturn) return;
+    setReturning(true);
+    try {
+      const res = await api.patch(`/issues/${toReturn._id}/return`);
+      const fine = res.data?.fine ?? res.data?.currentFine ?? 0;
+      toast.success(
+        fine > 0
+          ? `Book returned successfully. Late fine: ₹${fine}`
+          : "Book returned successfully"
+      );
+      setToReturn(null);
+      load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to return book"));
+      setToReturn(null);
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -270,39 +295,50 @@ export default function PurchaserIssues() {
                   <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
                   <td style={{ textAlign: "right" }}>
                     {i.status === "issued" && (
-                      i.reissueRequested ? (
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => handleCancelReissue(i._id)}
-                          disabled={cancellingId === i._id}
-                          style={{
-                            whiteSpace: "nowrap",
-                            background: "#fee2e2",
-                            color: "#b91c1c",
-                            border: "1px solid #fca5a5",
-                            fontWeight: 600,
-                          }}
-                          title="Cancel your pending reissue request"
-                        >
-                          {cancellingId === i._id ? "Cancelling..." : "Cancel Request"}
-                        </button>
-                      ) : (
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                        {i.reissueRequested ? (
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => handleCancelReissue(i._id)}
+                            disabled={cancellingId === i._id}
+                            style={{
+                              whiteSpace: "nowrap",
+                              background: "#fee2e2",
+                              color: "#b91c1c",
+                              border: "1px solid #fca5a5",
+                              fontWeight: 600,
+                            }}
+                            title="Cancel your pending reissue request"
+                          >
+                            {cancellingId === i._id ? "Cancelling..." : "Cancel Request"}
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-soft btn-sm"
+                            onClick={() => setToReissue(i)}
+                            disabled={(i.reissueCount || 0) >= 2 || i.isOverdue}
+                            style={{ whiteSpace: "nowrap" }}
+                            title={
+                              i.isOverdue
+                                ? "Overdue books cannot be reissued. Please return."
+                                : (i.reissueCount || 0) >= 2
+                                ? "Max reissues reached"
+                                : "Request a reissue"
+                            }
+                          >
+                            Reissue
+                          </button>
+                        )}
+
                         <button
                           className="btn btn-soft btn-sm"
-                          onClick={() => setToReissue(i)}
-                          disabled={(i.reissueCount || 0) >= 2 || i.isOverdue}
+                          onClick={() => setToReturn(i)}
                           style={{ whiteSpace: "nowrap" }}
-                          title={
-                            i.isOverdue
-                              ? "Overdue books cannot be reissued. Please return."
-                              : (i.reissueCount || 0) >= 2
-                              ? "Max reissues reached"
-                              : "Request a reissue"
-                          }
+                          title="Return this book"
                         >
-                          Reissue
+                          <ReturnIcon size={16} /> Return
                         </button>
-                      )
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -312,6 +348,7 @@ export default function PurchaserIssues() {
         </div>
       )}
 
+      {/* Reissue Request Modal */}
       {toReissue && (
         <ReissueModal
           issue={toReissue}
@@ -322,6 +359,28 @@ export default function PurchaserIssues() {
             load();
           }}
         />
+      )}
+
+      {/* Return Confirmation Modal */}
+      {toReturn && (
+        <Modal title="Return book" onClose={() => setToReturn(null)}>
+          <p>
+            Are you sure you want to return <strong>{toReturn.book?.title}</strong>?
+          </p>
+          {toReturn.currentFine > 0 && (
+            <p style={{ marginTop: 10 }}>
+              <span className="badge badge-danger">Late fine: ₹{toReturn.currentFine}</span>
+            </p>
+          )}
+          <div className="modal-actions">
+            <button className="btn btn-soft" onClick={() => setToReturn(null)}>
+              Cancel
+            </button>
+            <button className="btn" onClick={confirmReturn} disabled={returning}>
+              {returning ? "Returning..." : "Confirm return"}
+            </button>
+          </div>
+        </Modal>
       )}
     </>
   );
