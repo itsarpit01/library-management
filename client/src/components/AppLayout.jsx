@@ -8,7 +8,15 @@ import ConfirmModal from "./ConfirmModal";
 import MembershipModal from "./MembershipModal";
 import ThemeToggle from "./ThemeToggle";
 import { getEffectiveTier } from "../utils/membershipConfig";
-import { BookIcon, DashboardIcon, IssueIcon, RequestIcon, LogoutIcon, MenuIcon } from "./Icons";
+import {
+  BookIcon,
+  DashboardIcon,
+  IssueIcon,
+  RequestIcon,
+  LogoutIcon,
+  MenuIcon,
+  UserIcon,
+} from "./Icons";
 
 const SERVER_URL = "http://localhost:5000";
 
@@ -18,6 +26,7 @@ const NAV = {
     { to: "/librarian/books", label: "Books", icon: BookIcon },
     { to: "/librarian/issues", label: "Issue / Return", icon: IssueIcon },
     { to: "/librarian/requests", label: "Requests", icon: RequestIcon },
+    { to: "/librarian/users", label: "Members", icon: UserIcon || DashboardIcon },
   ],
   purchaser: [
     { to: "/purchaser", label: "Dashboard", icon: DashboardIcon, end: true },

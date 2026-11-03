@@ -1,10 +1,11 @@
 import express from "express";
 import {
   getMembers,
+  getMemberActivity,
   getMe,
   updateMe,
   changePassword,
-  upgradeMembership, // ← Added
+  upgradeMembership,
 } from "../controllers/userController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import { validate } from "../middleware/validate.js";
@@ -20,9 +21,10 @@ router.use(protect);
 router.get("/me", getMe);
 router.patch("/me", upload.single("avatar"), validate(updateProfileSchema), updateMe);
 router.patch("/me/password", passwordLimiter, validate(changePasswordSchema), changePassword);
-router.post("/upgrade-membership", upgradeMembership); // ← Added endpoint
+router.post("/upgrade-membership", upgradeMembership);
 
-// Sirf librarian
+// Sirf librarian endpoints
 router.get("/members", authorizeRoles("librarian"), getMembers);
+router.get("/members/:id/activity", authorizeRoles("librarian"), getMemberActivity);
 
 export default router;

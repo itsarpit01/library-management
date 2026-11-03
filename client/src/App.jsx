@@ -10,6 +10,7 @@ import LibrarianHome from "./pages/LibrarianHome";
 import LibrarianBooks from "./pages/LibrarianBooks";
 import LibrarianIssues from "./pages/LibrarianIssues";
 import LibrarianRequests from "./pages/LibrarianRequests";
+import LibrarianUsers from "./pages/LibrarianUsers";
 import PurchaserHome from "./pages/PurchaserHome";
 import PurchaserBooks from "./pages/PurchaserBooks";
 import PurchaserIssues from "./pages/PurchaserIssues";
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="books" element={<LibrarianBooks />} />
           <Route path="issues" element={<LibrarianIssues />} />
           <Route path="requests" element={<LibrarianRequests />} />
+          <Route path="users" element={<LibrarianUsers />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Route>

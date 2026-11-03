@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import Issue from "../models/Issue.js";
+import PurchaseRequest from "../models/PurchaseRequest.js";
 import { MEMBERSHIP_TIERS } from "../config/membershipConfig.js";
 
 const getEffectiveMembership = (user) => {
@@ -21,18 +23,105 @@ const publicUser = (user) => ({
   membership: getEffectiveMembership(user),
 });
 
-// Purani avatar file disk se hatao (sirf uploads/profiles ke andar ki)
 const removeOldAvatar = (avatarPath) => {
   if (!avatarPath || !avatarPath.startsWith("/uploads/profiles/")) return;
   fs.unlink(path.join(process.cwd(), avatarPath), () => {});
 };
 
-// GET /api/users/members (librarian)
+// GET /api/users/members (librarian: all members with live issue/request/fine counts)
 export const getMembers = async (req, res) => {
-  const members = await User.find({ role: "purchaser" })
-    .select("name email createdAt membership")
-    .sort({ name: 1 });
-  res.json(members);
+  try {
+    const users = await User.find({ role: "purchaser" })
+      .select("name email avatar createdAt membership")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const userIds = users.map((u) => u._id);
+
+    // Aggregate active issues count and total fines per user
+    const [issueStats, requestStats] = await Promise.all([
+      Issue.aggregate([
+        { $match: { member: { $in: userIds } } },
+        {
+          $group: {
+            _id: "$member",
+            activeIssuesCount: {
+              $sum: { $cond: [{ $eq: ["$status", "issued"] }, 1, 0] },
+            },
+            totalFines: { $sum: "$fine" },
+            overdueCount: {
+              $sum: { $cond: [{ $eq: ["$status", "overdue"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+      PurchaseRequest.aggregate([
+        {
+          $match: {
+            requestedBy: { $in: userIds },
+            status: { $in: ["pending", "counter_offered"] },
+          },
+        },
+        {
+          $group: {
+            _id: "$requestedBy",
+            pendingRequestsCount: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const issueMap = new Map(issueStats.map((item) => [String(item._id), item]));
+    const reqMap = new Map(requestStats.map((item) => [String(item._id), item.pendingRequestsCount]));
+
+    const result = users.map((u) => {
+      const stats = issueMap.get(String(u._id)) || {};
+      const pendingReqs = reqMap.get(String(u._id)) || 0;
+
+      return {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        avatar: u.avatar,
+        role: "purchaser",
+        membership: getEffectiveMembership(u),
+        createdAt: u.createdAt,
+        activeBooksCount: stats.activeIssuesCount || 0,
+        pendingRequestsCount: pendingReqs,
+        totalFines: stats.totalFines || 0,
+        overdueCount: stats.overdueCount || 0,
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch user records" });
+  }
+};
+
+// GET /api/users/members/:id/activity (librarian: inspect single member history & current issues)
+export const getMemberActivity = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const member = await User.findById(id).select("-password").lean();
+    if (!member) return res.status(404).json({ message: "Member not found" });
+
+    const [issues, requests] = await Promise.all([
+      Issue.find({ member: id }).populate("book").sort({ createdAt: -1 }).lean(),
+      PurchaseRequest.find({ requestedBy: id }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    res.json({
+      member: {
+        ...member,
+        membership: getEffectiveMembership(member),
+      },
+      issues,
+      requests,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch member activity" });
+  }
 };
 
 // GET /api/users/me (any logged-in user)
@@ -58,9 +147,7 @@ export const updateMe = async (req, res) => {
   res.json({ user: publicUser(user) });
 };
 
-// POST /api/users/upgrade-membership (purchaser)
-// Bina payment ke ye koi bhi plan de deta hai, isliye sirf ALLOW_FREE_UPGRADE=true par chalta hai.
-// Payment gateway aane par is flag ki jagah payment verification lagao.
+// POST /api/users/upgrade-membership (purchaser fallback)
 export const upgradeMembership = async (req, res) => {
   if (process.env.ALLOW_FREE_UPGRADE !== "true") {
     return res.status(403).json({
