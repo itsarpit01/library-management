@@ -37,6 +37,10 @@ export default function PurchaserRequests() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  // Pagination state (8 items per page)
+  const PAGE_SIZE = 8;
+  const [page, setPage] = useState(1);
+
   const [showForm, setShowForm] = useState(false);
   const [toEdit, setToEdit] = useState(null);
   const [toCancel, setToCancel] = useState(null);
@@ -56,7 +60,6 @@ export default function PurchaserRequests() {
       setRequests(Array.isArray(reqRes.data) ? reqRes.data : []);
       const issues = Array.isArray(issueRes.data) ? issueRes.data : [];
       setActiveIssuesCount(issues.filter((i) => i.status === "issued").length);
-      // Notify Browse Books to re-check quota (e.g. librarian may have rejected a request)
       window.dispatchEvent(new Event("quota-updated"));
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -69,7 +72,6 @@ export default function PurchaserRequests() {
     load();
   }, [load]);
 
-  // Auto-refresh when tab comes back into view (librarian may have acted while away)
   useEffect(() => {
     const onVisibility = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onVisibility);
@@ -80,18 +82,21 @@ export default function PurchaserRequests() {
     };
   }, [load]);
 
+  // Reset page to 1 whenever search or filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, startDate, endDate]);
 
   // Quota calculation
   const pendingCount = requests.filter((r) => ["pending", "counter_offered"].includes(r.status)).length;
   const totalActiveSlots = activeIssuesCount + pendingCount;
   const isQuotaFull = tier.maxBooks !== Infinity && totalActiveSlots >= tier.maxBooks;
 
-  // Filtered requests by Search query & Date Range (From -> Today / To)
+  // Filtered requests by Search query & Date Range
   const filteredRequests = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
 
     return requests.filter((r) => {
-      // 1. Search by Book name or author
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = r.title?.toLowerCase().includes(q);
@@ -99,7 +104,6 @@ export default function PurchaserRequests() {
         if (!matchTitle && !matchAuthor) return false;
       }
 
-      // 2. Date Range Filter on Request Creation Date (createdAt)
       if (startDate || endDate) {
         const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "";
         const fromDate = startDate || "1970-01-01";
@@ -114,6 +118,13 @@ export default function PurchaserRequests() {
     });
   }, [requests, searchQuery, startDate, endDate]);
 
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRequests.slice(start, start + PAGE_SIZE);
+  }, [filteredRequests, page]);
+
   const clearDateRange = () => {
     setStartDate("");
     setEndDate("");
@@ -125,7 +136,6 @@ export default function PurchaserRequests() {
       await api.delete(`/purchase-requests/${toCancel._id}`);
       toast.success("Request cancelled");
 
-      // Real-time signal for sidebar quota
       window.dispatchEvent(new Event("quota-updated"));
 
       setToCancel(null);
@@ -138,13 +148,11 @@ export default function PurchaserRequests() {
     }
   };
 
-  const handleAcceptCounter = async (r) => {
-    setAcceptingId(r._id);
+  const handleAcceptCounter = async (req) => {
+    setAcceptingId(req._id);
     try {
-      await api.patch(`/purchase-requests/${r._id}/accept-counter`);
-      toast.success("Proposed date accepted! Your needed-until date is updated.");
-
-      window.dispatchEvent(new Event("quota-updated"));
+      await api.patch(`/purchase-requests/${req._id}/accept-counter`);
+      toast.success("Accepted counter offer. Waiting for librarian to issue book.");
       load();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -157,76 +165,97 @@ export default function PurchaserRequests() {
     <>
       <div className="page-head">
         <div>
-          <h2>My Requests</h2>
-          <p>Request books from the library. You can review dates or edit until approved.</p>
+          <h2>My Book Requests</h2>
+          <p>Request new books or track your pending approvals.</p>
         </div>
-        <button
-          className="btn"
-          onClick={() => setShowForm(true)}
-          disabled={isQuotaFull}
-          title={isQuotaFull ? `Limit reached (${totalActiveSlots}/${tier.maxBooks} slots used). Return a book or upgrade plan.` : "Submit a new request"}
-        >
-          <PlusIcon size={18} /> {isQuotaFull ? "Limit Reached" : "New request"}
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {isQuotaFull && (
+            <span
+              style={{
+                fontSize: "0.8rem",
+                color: "#dc2626",
+                fontWeight: 600,
+                background: "rgba(239, 68, 68, 0.1)",
+                padding: "6px 12px",
+                borderRadius: 8,
+              }}
+            >
+              Slots limit reached ({tier.maxBooks} max on {tier.name} plan)
+            </span>
+          )}
+
+          <button
+            className="btn"
+            onClick={() => setShowForm(true)}
+            disabled={isQuotaFull}
+            title={isQuotaFull ? "You have reached your active slots limit. Return an issued book or wait for reviews." : "Request a book"}
+          >
+            <PlusIcon size={18} /> Request Book
+          </button>
+        </div>
       </div>
 
-      {/* Search & Date Range Toolbar (1 Single Horizontal Line) */}
+      {/* Toolbar: Status Tabs + Search Input + Date Range Filter */}
       <div
         className="toolbar"
         style={{
           display: "flex",
-          gap: 10,
+          gap: 12,
           alignItems: "center",
-          flexWrap: "nowrap",
-          overflowX: "auto",
-          paddingBottom: 4,
+          flexWrap: "wrap",
           marginBottom: 16,
         }}
       >
-        {/* Compact Search Bar */}
-        <div className="search-box" style={{ maxWidth: 240, minWidth: 180, flex: "0 1 240px" }}>
-          <SearchIcon size={16} />
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          {[
+            { key: "", label: "All" },
+            { key: "pending", label: "Pending" },
+            { key: "counter_offered", label: "Counter Offered" },
+            { key: "approved", label: "Approved" },
+            { key: "rejected", label: "Rejected" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`tab ${statusFilter === t.key ? "active" : ""}`}
+              onClick={() => setStatusFilter(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ position: "relative", minWidth: 220, flex: 1 }}>
+          <span
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-secondary, #9ca3af)",
+              display: "flex",
+              alignItems: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <SearchIcon size={16} />
+          </span>
           <input
-            placeholder="Search book or author..."
+            type="text"
+            className="toolbar-input"
+            placeholder="Search by book title or author..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: 32, width: "100%" }}
           />
         </div>
 
-        {/* Status Dropdown with Inner SVG Arrow */}
-        <select
-          className="toolbar-input"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            width: "auto",
-            minWidth: 140,
-            appearance: "none",
-            WebkitAppearance: "none",
-            MozAppearance: "none",
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6784' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "right 10px center",
-            paddingRight: 32,
-            cursor: "pointer",
-          }}
-        >
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="counter_offered">Counter Offered</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-
-        {/* Date Range: From -> To (Locked in 1 Single Line) */}
         <div
           style={{
-            display: "inline-flex",
+            display: "flex",
             alignItems: "center",
             gap: 6,
-            flexWrap: "nowrap",
-            whiteSpace: "nowrap",
-            background: "var(--card-bg, #f9fafb)",
+            background: "var(--card-bg, #fff)",
             padding: "4px 8px",
             borderRadius: 8,
             border: "1px solid var(--border, #e5e7eb)",
@@ -291,9 +320,8 @@ export default function PurchaserRequests() {
               </tr>
             </thead>
             <tbody>
-              {filteredRequests.map((r) => (
+              {paginatedRequests.map((r) => (
                 <tr key={r._id}>
-                  {/* Book & Author in 1 Single Line */}
                   <td style={{ whiteSpace: "nowrap" }}>
                     <strong>{r.title}</strong>
                     {r.author && (
@@ -303,16 +331,9 @@ export default function PurchaserRequests() {
                     )}
                   </td>
 
-                  {/* Requested Date */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.createdAt)}</td>
-
-                  {/* Qty */}
                   <td style={{ whiteSpace: "nowrap" }}>{r.quantity}</td>
-
-                  {/* Needed Until */}
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(r.neededUntil)}</td>
-
-                  {/* Librarian Proposed Date */}
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.proposedDate ? (
                       <strong style={{ color: "var(--primary, #5c6bc0)" }}>
@@ -323,10 +344,8 @@ export default function PurchaserRequests() {
                     )}
                   </td>
 
-                  {/* Status */}
                   <td style={{ whiteSpace: "nowrap" }}>{statusBadge(r.status)}</td>
 
-                  {/* Librarian Note in 1 Single Line */}
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.reviewNote ? (
                       <span>
@@ -342,7 +361,6 @@ export default function PurchaserRequests() {
                     )}
                   </td>
 
-                  {/* Actions in 1 Single Line */}
                   <td style={{ whiteSpace: "nowrap" }}>
                     {r.status === "counter_offered" ? (
                       <div style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
@@ -384,6 +402,31 @@ export default function PurchaserRequests() {
               ))}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="pagination" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
 

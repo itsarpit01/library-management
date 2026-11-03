@@ -103,7 +103,7 @@ export default function AppLayout() {
       ? "Upgrade to Premium →"
       : tier.tier === "premium"
       ? "Upgrade to Ultimate →"
-      : "Manage Plan →";
+      : "Your Plan →";
 
   return (
     <div className="app">
@@ -121,42 +121,48 @@ export default function AppLayout() {
         </div>
 
         <nav className="nav">
-          {links.map(({ to, label, icon: Icon, end }) => (
+          {links.map((item) => (
             <NavLink
-              key={to}
-              to={to}
-              end={end}
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
               onClick={() => setOpen(false)}
-              className={({ isActive }) => (isActive ? "active" : "")}
             >
-              <Icon size={19} />
-              {label}
+              <item.icon />
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
-        {/* Sidebar Quota & Membership Widget for Purchaser */}
+        {/* Live Borrowing Capacity Widget (Purchaser Only) */}
         {user?.role === "purchaser" && (
           <div
+            className="sidebar-quota-card"
             style={{
-              marginTop: "auto",
-              padding: "12px 14px",
+              margin: "auto 12px 14px 12px",
+              padding: "10px 12px",
               background: "rgba(92, 107, 192, 0.08)",
-              border: "1px solid rgba(92, 107, 192, 0.18)",
-              borderRadius: 8,
-              margin: "auto 12px 12px 12px",
+              borderRadius: "10px",
+              border: "1px solid rgba(92, 107, 192, 0.15)",
               cursor: "pointer",
             }}
             onClick={() => setShowMembershipModal(true)}
-            title="Click to view membership plans"
+            title="Click to view plan limits"
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <span
                 style={{
-                  fontSize: "0.72rem",
+                  fontSize: "0.75rem",
                   fontWeight: 700,
                   textTransform: "uppercase",
-                  color: isFull ? "#dc2626" : "var(--primary, #5c6bc0)",
+                  letterSpacing: "0.5px",
+                  color:
+                    tier.tier === "ultimate"
+                      ? "#d97706"
+                      : tier.tier === "premium"
+                      ? "var(--primary, #5c6bc0)"
+                      : "#6b7280",
                 }}
               >
                 {tier.name} Plan
@@ -168,24 +174,33 @@ export default function AppLayout() {
                   color: isFull ? "#dc2626" : "var(--text, #333)",
                 }}
               >
-                {totalUsed} / {tier.maxBooks === Infinity ? "∞" : tier.maxBooks}
+                {tier.tier === "ultimate" ? `${totalUsed} active` : `${totalUsed} / ${tier.maxBooks}`}
               </span>
             </div>
 
-            <div style={{ width: "100%", height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 3, overflow: "hidden" }}>
-              <div
-                style={{
-                  height: "100%",
-                  width: `${percentage}%`,
-                  background: isFull ? "#ef4444" : "var(--primary, #5c6bc0)",
-                  borderRadius: 3,
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
+            {/* Progress bar sirf Free aur Premium ke liye */}
+            {tier.tier !== "ultimate" && (
+              <div style={{ width: "100%", height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 3, overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${percentage}%`,
+                    background: isFull ? "#ef4444" : "var(--primary, #5c6bc0)",
+                    borderRadius: 3,
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
-              <span>{isFull ? "Limit Reached" : `${remaining} slot(s) left`}</span>
+              <span>
+                {tier.tier === "ultimate"
+                  ? `${sidebarCapacity.active} issued • ${sidebarCapacity.pending} pending`
+                  : isFull
+                  ? "Limit Reached"
+                  : `${remaining} slot(s) left`}
+              </span>
               <span style={{ color: "var(--primary, #5c6bc0)", fontWeight: 600, whiteSpace: "nowrap" }}>
                 {upgradeLabel}
               </span>

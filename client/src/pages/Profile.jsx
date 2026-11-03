@@ -56,7 +56,6 @@ export default function Profile() {
   }, [user?.role]);
 
   useEffect(() => {
-    // Load profile, active issued books, pending requests, and transactions
     Promise.all([
       api.get("/users/me"),
       api.get("/issues/my").catch(() => ({ data: [] })),
@@ -80,7 +79,6 @@ export default function Profile() {
 
     loadTransactions();
 
-    // Jab plan upgrade ho, toh transactions bhi auto-refresh hon
     const onQuotaUpdated = () => {
       loadTransactions();
     };
@@ -407,30 +405,37 @@ export default function Profile() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", fontWeight: 600, marginBottom: 6 }}>
                   <span>Active Capacity</span>
                   <span style={{ color: totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "var(--primary, #5c6bc0)" }}>
-                    {totalActiveSlots} / {tier.maxBooks === Infinity ? "Unlimited" : `${tier.maxBooks} slots`}
+                    {tier.tier === "ultimate"
+                      ? `${totalActiveSlots} active`
+                      : `${totalActiveSlots} / ${tier.maxBooks} slots`}
                   </span>
                 </div>
-                <div style={{ width: "100%", height: 7, background: "rgba(0,0,0,0.08)", borderRadius: 4, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${usagePercentage}%`,
-                      background:
-                        totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity
-                          ? "#ef4444"
-                          : "var(--primary, #5c6bc0)",
-                      borderRadius: 4,
-                      transition: "width 0.3s ease",
-                    }}
-                  />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-secondary, #666)", marginTop: 6 }}>
+
+                {/* Progress bar sirf Free aur Premium ke liye */}
+                {tier.tier !== "ultimate" && (
+                  <div style={{ width: "100%", height: 7, background: "rgba(0,0,0,0.08)", borderRadius: 4, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${usagePercentage}%`,
+                        background:
+                          totalActiveSlots >= tier.maxBooks
+                            ? "#ef4444"
+                            : "var(--primary, #5c6bc0)",
+                        borderRadius: 4,
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-secondary, #666)", marginTop: tier.tier === "ultimate" ? 0 : 6 }}>
                   <span>{activeBooksCount} issued • {activeRequestsCount} pending</span>
-                  <strong style={{ color: totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "#16a34a" }}>
-                    {tier.maxBooks === Infinity
-                      ? "Unlimited remaining"
-                      : `${remainingSlots} request slot(s) left`}
-                  </strong>
+                  {tier.tier !== "ultimate" && (
+                    <strong style={{ color: totalActiveSlots >= tier.maxBooks ? "#dc2626" : "#16a34a" }}>
+                      {remainingSlots} request slot(s) left
+                    </strong>
+                  )}
                 </div>
               </div>
 
@@ -522,7 +527,7 @@ export default function Profile() {
                 onClick={() => setShowMembershipModal(true)}
                 style={{ width: "100%" }}
               >
-                View Plans & Upgrade
+                {tier.tier === "ultimate" ? "Your Plan" : "View Plans & Upgrade"}
               </button>
             </div>
           </div>

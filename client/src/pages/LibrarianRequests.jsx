@@ -46,6 +46,10 @@ export default function LibrarianRequests() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  // Pagination State (8 items per page)
+  const PAGE_SIZE = 8;
+  const [page, setPage] = useState(1);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -107,6 +111,11 @@ export default function LibrarianRequests() {
     };
   }, [loadData]);
 
+  // Tab, search ya date change hone par page 1 par reset karein
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, tab, startDate, endDate]);
+
   const filteredRequests = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
     return requests.filter((r) => {
@@ -127,6 +136,13 @@ export default function LibrarianRequests() {
       return true;
     });
   }, [requests, searchQuery, startDate, endDate]);
+
+  // Paginated requests calculation
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRequests.slice(start, start + PAGE_SIZE);
+  }, [filteredRequests, page]);
 
   const clearDateRange = () => {
     setStartDate("");
@@ -434,7 +450,7 @@ export default function LibrarianRequests() {
               </tr>
             </thead>
             <tbody>
-              {filteredRequests.map((r) => (
+              {paginatedRequests.map((r) => (
                 <tr key={r.isReissue ? `reissue-${r._id}` : r._id}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -490,6 +506,31 @@ export default function LibrarianRequests() {
               ))}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="pagination" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -691,11 +732,11 @@ export default function LibrarianRequests() {
       {/* Book Issue Form Modal */}
       {issueModalData && (
         <IssueFormModal
-            initial={issueModalData}
-    onClose={() => setIssueModalData(null)}
-    onSaved={() => {
-      setIssueModalData(null);
-      loadData();
+          initial={issueModalData}
+          onClose={() => setIssueModalData(null)}
+          onSaved={() => {
+            setIssueModalData(null);
+            loadData();
           }}
         />
       )}
