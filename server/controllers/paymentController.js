@@ -29,7 +29,6 @@ const calculateProratedAmount = (user, targetTier) => {
   const currentTier = user?.membership?.tier;
   const expiresAt = user?.membership?.expiresAt;
 
-  // Prorated credit applies only when upgrading from active Premium to Ultimate
   if (
     targetTier === "ultimate" &&
     currentTier === "premium" &&
@@ -41,7 +40,6 @@ const calculateProratedAmount = (user, targetTier) => {
     const remainingMs = new Date(expiresAt).getTime() - Date.now();
     const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
 
-    // Ratio between 0 and 1
     const unusedRatio = Math.min(1, Math.max(0, remainingDays / totalDays));
     const credit = Math.round(currentPlan.amount * unusedRatio);
     const payableAmount = Math.max(1, targetPlan.amount - credit);
@@ -54,7 +52,6 @@ const calculateProratedAmount = (user, targetTier) => {
     };
   }
 
-  // Normal upgrade for free or expired members
   return {
     payableAmount: targetPlan.amount,
     credit: 0,
@@ -63,7 +60,7 @@ const calculateProratedAmount = (user, targetTier) => {
   };
 };
 
-// 1. Create Order & Save Pending Transaction in DB (with Model B Prorated Calculation)
+// 1. Create Order & Save Pending Transaction in DB
 export const createOrder = async (req, res) => {
   try {
     const { tier } = req.body;
@@ -83,11 +80,14 @@ export const createOrder = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Model B Prorated calculation
-    const { payableAmount, credit, remainingDays, originalPrice } = calculateProratedAmount(
-      user,
-      tier
+    // Cancel any previous pending transactions of this user
+    await Transaction.updateMany(
+      { user: userId, status: "pending" },
+      { status: "failed", failureReason: "Superceded by a new checkout session" }
     );
+
+    // Model B Prorated calculation
+    const { payableAmount, credit, remainingDays } = calculateProratedAmount(user, tier);
 
     const razorpay = getRazorpayInstance();
 
@@ -105,7 +105,7 @@ export const createOrder = async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
-    // Save initial PENDING transaction in DB with prorated details
+    // Save initial PENDING transaction in DB
     await Transaction.create({
       user: userId,
       orderId: order.id,
@@ -113,19 +113,11 @@ export const createOrder = async (req, res) => {
       amount: payableAmount,
       currency: "INR",
       status: "pending",
-      metadata: {
-        originalPrice,
-        credit,
-        remainingDays,
-      },
     });
 
     res.status(200).json({
       orderId: order.id,
       amount: order.amount,
-      payableAmount,
-      credit,
-      remainingDays,
       currency: order.currency,
       tier,
       keyId: process.env.RAZORPAY_KEY_ID,
@@ -152,7 +144,6 @@ export const verifyPayment = async (req, res) => {
 
     const userId = req.user?.id || req.user?._id;
 
-    // Cryptographic HMAC-SHA256 signature check
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -167,19 +158,16 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Invalid payment signature. Verification failed." });
     }
 
-    // Check if already processed (Idempotency check)
     const existingTx = await Transaction.findOne({ orderId: razorpay_order_id });
     if (existingTx && existingTx.status === "success") {
       const user = await User.findById(userId).select("-password");
       return res.status(200).json({ message: "Plan already upgraded!", user });
     }
 
-    // Dates calculation for new upgraded tier
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + plan.months);
 
-    // Update Transaction to SUCCESS
     await Transaction.findOneAndUpdate(
       { orderId: razorpay_order_id },
       {
@@ -191,7 +179,6 @@ export const verifyPayment = async (req, res) => {
       { upsert: true }
     );
 
-    // Update User in Database
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
@@ -221,7 +208,7 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-// 3. Mark Payment as Failed (Client fail sync)
+// 3. Mark Payment as Failed (Called on close or decline)
 export const markPaymentFailed = async (req, res) => {
   try {
     const { orderId, reason } = req.body;
@@ -233,7 +220,7 @@ export const markPaymentFailed = async (req, res) => {
       { orderId },
       {
         status: "failed",
-        failureReason: reason || "Payment failed or declined by bank",
+        failureReason: reason || "Payment cancelled by user",
       }
     );
 
@@ -243,7 +230,7 @@ export const markPaymentFailed = async (req, res) => {
   }
 };
 
-// 4. Razorpay Server-to-Server Webhook Handler
+// 4. Razorpay Webhook Handler
 export const handleWebhook = async (req, res) => {
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -253,7 +240,6 @@ export const handleWebhook = async (req, res) => {
       return res.status(400).json({ message: "Webhook secret or signature missing" });
     }
 
-    // Verify Webhook Signature with raw body
     const expectedSignature = crypto
       .createHmac("sha256", webhookSecret)
       .update(req.rawBody || JSON.stringify(req.body))
@@ -331,6 +317,21 @@ export const handleWebhook = async (req, res) => {
 export const getMyTransactions = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
+
+    // Auto-mark any abandoned pending orders older than 1 minute as failed
+    const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000);
+    await Transaction.updateMany(
+      {
+        user: userId,
+        status: "pending",
+        createdAt: { $lt: oneMinuteAgo },
+      },
+      {
+        status: "failed",
+        failureReason: "Payment session closed or abandoned",
+      }
+    );
+
     const transactions = await Transaction.find({ user: userId }).sort({ createdAt: -1 });
     res.status(200).json(transactions);
   } catch (error) {

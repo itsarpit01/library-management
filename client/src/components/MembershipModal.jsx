@@ -14,6 +14,39 @@ export default function MembershipModal({ onClose }) {
 
   const currentTier = getEffectiveTier(user);
 
+  /**
+   * Model B: Calculate Prorated Upgrade Details for Active Premium Users
+   */
+  const getProratedUpgradeInfo = (targetTier) => {
+    if (targetTier !== "ultimate" || currentTier.tier !== "premium") {
+      return null;
+    }
+
+    const expiresAt = user?.membership?.expiresAt;
+    if (!expiresAt) return null;
+
+    const expiryTime = new Date(expiresAt).getTime();
+    const now = Date.now();
+    if (expiryTime <= now) return null;
+
+    // Total validity of Premium plan = 180 days (6 months)
+    const totalDays = 6 * 30;
+    const remainingMs = expiryTime - now;
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+
+    // Ratio of unused time
+    const unusedRatio = Math.min(1, Math.max(0, remainingDays / totalDays));
+    const credit = Math.round(499 * unusedRatio);
+    const payableAmount = Math.max(1, 999 - credit);
+
+    return {
+      originalPrice: 999,
+      payableAmount,
+      credit,
+      remainingDays,
+    };
+  };
+
   const handleUpgrade = async (plan) => {
     if (!window.Razorpay) {
       toast.error("Razorpay SDK failed to load. Please refresh the page and try again.");
@@ -23,7 +56,7 @@ export default function MembershipModal({ onClose }) {
     setProcessingTier(plan.tier);
 
     try {
-      // 1. Create order on backend (DB me pending transaction banti hai)
+      // 1. Create order on backend (Backend automatically applies Model B prorated deduction)
       const res = await api.post("/payment/create-order", { tier: plan.tier });
       const { orderId, amount, currency, keyId } = res.data;
 
@@ -47,7 +80,7 @@ export default function MembershipModal({ onClose }) {
         },
         handler: async function (response) {
           try {
-            // 3. Verify signature on backend (DB me status: success)
+            // 3. Verify signature on backend
             const verifyRes = await api.post("/payment/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
@@ -57,7 +90,6 @@ export default function MembershipModal({ onClose }) {
 
             toast.success(verifyRes.data.message || `Upgraded to ${plan.name} successfully!`);
 
-            // Refresh user and instantly update transaction table
             await refreshUser();
             window.dispatchEvent(new Event("quota-updated"));
 
@@ -69,8 +101,17 @@ export default function MembershipModal({ onClose }) {
           }
         },
         modal: {
-          ondismiss: function () {
-            // Modal dismiss hone par bhi UI instantly update ho
+          ondismiss: async function () {
+            // Jab user checkout popup (X) dabakar band kare, status turant 'failed' mark ho
+            try {
+              await api.post("/payment/mark-failed", {
+                orderId: orderId,
+                reason: "Payment cancelled by user (closed checkout popup)",
+              });
+            } catch {
+              // ignore
+            }
+
             window.dispatchEvent(new Event("quota-updated"));
             setProcessingTier(null);
           },
@@ -79,12 +120,11 @@ export default function MembershipModal({ onClose }) {
 
       const razorpayInstance = new window.Razorpay(options);
 
-      // Jab payment fail ho (Wrong OTP / Bank decline)
+      // Jab bank decline kare ya OTP galat ho
       razorpayInstance.on("payment.failed", async function (response) {
         toast.error(`Payment failed: ${response.error?.description || "Something went wrong"}`);
 
         try {
-          // Backend ko sync bhejo taaki status: 'failed' ho jaye bina refresh ke
           await api.post("/payment/mark-failed", {
             orderId: orderId,
             reason: response.error?.description || "Bank declined transaction",
@@ -93,7 +133,6 @@ export default function MembershipModal({ onClose }) {
           // ignore
         }
 
-        // Real-time signal: History me turant 'failed' dikhe bina refresh ke
         window.dispatchEvent(new Event("quota-updated"));
         setProcessingTier(null);
       });
@@ -140,6 +179,7 @@ export default function MembershipModal({ onClose }) {
         {Object.values(MEMBERSHIP_TIERS).map((plan) => {
           const isCurrent = currentTier.tier === plan.tier;
           const isProcessing = processingTier === plan.tier;
+          const proratedInfo = getProratedUpgradeInfo(plan.tier);
 
           return (
             <div
@@ -180,15 +220,47 @@ export default function MembershipModal({ onClose }) {
                 {plan.name}
               </h3>
 
-              <div style={{ fontSize: "1.5rem", fontWeight: "bold", margin: "4px 0 12px 0" }}>
-                {plan.price === 0 ? "Free" : `₹${plan.price}`}
-                {plan.durationMonths && (
-                  <span style={{ fontSize: "0.82rem", color: "#888", fontWeight: "normal" }}>
-                    {" "}
-                    / {plan.durationMonths} mos
-                  </span>
-                )}
-              </div>
+              {/* Price Section */}
+              {proratedInfo ? (
+                <div style={{ margin: "4px 0 10px 0" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: "1.6rem", fontWeight: "bold", color: "#d97706" }}>
+                      ₹{proratedInfo.payableAmount}
+                    </span>
+                    <span
+                      style={{
+                        textDecoration: "line-through",
+                        color: "#94a3b8",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      ₹{proratedInfo.originalPrice}
+                    </span>
+                    <span style={{ fontSize: "0.82rem", color: "#888" }}>/ 12 mos</span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#16a34a",
+                      fontWeight: 600,
+                      marginTop: 4,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    ₹{proratedInfo.credit} unused plan credit deducted ({proratedInfo.remainingDays} days left)
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: "1.5rem", fontWeight: "bold", margin: "4px 0 12px 0" }}>
+                  {plan.price === 0 ? "Free" : `₹${plan.price}`}
+                  {plan.durationMonths && (
+                    <span style={{ fontSize: "0.82rem", color: "#888", fontWeight: "normal" }}>
+                      {" "}
+                      / {plan.durationMonths} mos
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Perks List */}
               <ul
@@ -269,7 +341,11 @@ export default function MembershipModal({ onClose }) {
                     fontWeight: 600,
                   }}
                 >
-                  {isProcessing ? "Opening Checkout..." : `Upgrade to ${plan.name}`}
+                  {isProcessing
+                    ? "Opening Checkout..."
+                    : proratedInfo
+                    ? `Pay ₹${proratedInfo.payableAmount} & Upgrade`
+                    : `Upgrade to ${plan.name}`}
                 </button>
               )}
             </div>
