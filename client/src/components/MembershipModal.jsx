@@ -56,11 +56,11 @@ export default function MembershipModal({ onClose }) {
             });
 
             toast.success(verifyRes.data.message || `Upgraded to ${plan.name} successfully!`);
-            
+
             // Refresh user and instantly update transaction table
             await refreshUser();
             window.dispatchEvent(new Event("quota-updated"));
-            
+
             onClose();
           } catch (err) {
             toast.error(getErrorMessage(err));
@@ -68,18 +68,9 @@ export default function MembershipModal({ onClose }) {
             setProcessingTier(null);
           }
         },
-                modal: {
-          ondismiss: async function () {
-            try {
-              // Popup close hote hi backend me 'failed' mark karo
-              await api.post("/payment/mark-failed", {
-                orderId: orderId,
-                reason: "Payment cancelled / closed by user",
-              });
-            } catch {
-              // ignore
-            }
-            // Screen par turant Failed dikhane ke liye signal bhejo
+        modal: {
+          ondismiss: function () {
+            // Modal dismiss hone par bhi UI instantly update ho
             window.dispatchEvent(new Event("quota-updated"));
             setProcessingTier(null);
           },
@@ -91,9 +82,9 @@ export default function MembershipModal({ onClose }) {
       // Jab payment fail ho (Wrong OTP / Bank decline)
       razorpayInstance.on("payment.failed", async function (response) {
         toast.error(`Payment failed: ${response.error?.description || "Something went wrong"}`);
-        
+
         try {
-          // Backend ko batao taaki status: 'failed' ho jaye bina refresh ke
+          // Backend ko sync bhejo taaki status: 'failed' ho jaye bina refresh ke
           await api.post("/payment/mark-failed", {
             orderId: orderId,
             reason: response.error?.description || "Bank declined transaction",
@@ -137,11 +128,11 @@ export default function MembershipModal({ onClose }) {
         )}
       </div>
 
-      {/* Horizontal 3-Column Grid */}
+      {/* Strict Horizontal 3-Column Grid */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
           gap: 16,
           alignItems: "stretch",
         }}
@@ -200,10 +191,37 @@ export default function MembershipModal({ onClose }) {
               </div>
 
               {/* Perks List */}
-              <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px 0", flex: 1, fontSize: "0.85rem" }}>
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: "0 0 16px 0",
+                  flex: 1,
+                  fontSize: "0.85rem",
+                }}
+              >
                 {plan.perks.map((perk, i) => (
-                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, lineHeight: 1.35 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success, #16a34a)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                  <li
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      marginBottom: 8,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--success, #16a34a)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0, marginTop: 2 }}
+                    >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                     <span>{perk}</span>
@@ -211,7 +229,7 @@ export default function MembershipModal({ onClose }) {
                 ))}
               </ul>
 
-              {/* Action Button */}
+              {/* Action Buttons */}
               {isCurrent ? (
                 <button
                   className="btn btn-soft"
@@ -227,6 +245,14 @@ export default function MembershipModal({ onClose }) {
                   style={{ width: "100%", fontWeight: 600, opacity: 0.6 }}
                 >
                   Standard Plan
+                </button>
+              ) : currentTier.tier === "ultimate" ? (
+                <button
+                  className="btn btn-soft"
+                  disabled
+                  style={{ width: "100%", fontWeight: 600, opacity: 0.6 }}
+                >
+                  Included
                 </button>
               ) : (
                 <button

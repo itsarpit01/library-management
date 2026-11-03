@@ -97,6 +97,14 @@ export default function AppLayout() {
   const isFull = tier.maxBooks !== Infinity && totalUsed >= tier.maxBooks;
   const percentage = tier.maxBooks === Infinity ? 10 : Math.min(100, Math.round((totalUsed / tier.maxBooks) * 100));
 
+  // Dynamic upgrade call to action based on current active tier
+  const upgradeLabel =
+    tier.tier === "free"
+      ? "Upgrade to Premium →"
+      : tier.tier === "premium"
+      ? "Upgrade to Ultimate →"
+      : "Manage Plan →";
+
   return (
     <div className="app">
       <div
@@ -178,7 +186,9 @@ export default function AppLayout() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
               <span>{isFull ? "Limit Reached" : `${remaining} slot(s) left`}</span>
-              <span style={{ color: "var(--primary, #5c6bc0)", fontWeight: 600 }}>Upgrade →</span>
+              <span style={{ color: "var(--primary, #5c6bc0)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                {upgradeLabel}
+              </span>
             </div>
           </div>
         )}
@@ -229,10 +239,10 @@ export default function AppLayout() {
                 title="Click to view or upgrade your membership"
               >
                 <span>{tier.name} Plan</span>
-                {tier.tier === "free" && (
+                {tier.tier !== "ultimate" && (
                   <span
                     style={{
-                      background: "#7c3aed",
+                      background: tier.tier === "free" ? "#7c3aed" : "rgba(255,255,255,0.25)",
                       color: "#fff",
                       fontSize: "0.7rem",
                       padding: "1px 6px",

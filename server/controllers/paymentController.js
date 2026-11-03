@@ -18,7 +18,52 @@ const PLAN_DETAILS = {
   ultimate: { amount: 999, months: 12 },
 };
 
-// 1. Create Order & Save Pending Transaction in DB
+/**
+ * Model B: Prorated Calculation Helper
+ * Calculates unused days credit when upgrading from active Premium to Ultimate
+ */
+const calculateProratedAmount = (user, targetTier) => {
+  const targetPlan = PLAN_DETAILS[targetTier];
+  if (!targetPlan) return { payableAmount: 0, credit: 0, remainingDays: 0 };
+
+  const currentTier = user?.membership?.tier;
+  const expiresAt = user?.membership?.expiresAt;
+
+  // Prorated credit applies only when upgrading from active Premium to Ultimate
+  if (
+    targetTier === "ultimate" &&
+    currentTier === "premium" &&
+    expiresAt &&
+    new Date(expiresAt) > new Date()
+  ) {
+    const currentPlan = PLAN_DETAILS.premium;
+    const totalDays = currentPlan.months * 30; // 180 days for 6 months
+    const remainingMs = new Date(expiresAt).getTime() - Date.now();
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+
+    // Ratio between 0 and 1
+    const unusedRatio = Math.min(1, Math.max(0, remainingDays / totalDays));
+    const credit = Math.round(currentPlan.amount * unusedRatio);
+    const payableAmount = Math.max(1, targetPlan.amount - credit);
+
+    return {
+      payableAmount,
+      credit,
+      remainingDays,
+      originalPrice: targetPlan.amount,
+    };
+  }
+
+  // Normal upgrade for free or expired members
+  return {
+    payableAmount: targetPlan.amount,
+    credit: 0,
+    remainingDays: 0,
+    originalPrice: targetPlan.amount,
+  };
+};
+
+// 1. Create Order & Save Pending Transaction in DB (with Model B Prorated Calculation)
 export const createOrder = async (req, res) => {
   try {
     const { tier } = req.body;
@@ -33,33 +78,54 @@ export const createOrder = async (req, res) => {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Model B Prorated calculation
+    const { payableAmount, credit, remainingDays, originalPrice } = calculateProratedAmount(
+      user,
+      tier
+    );
+
     const razorpay = getRazorpayInstance();
 
     const options = {
-      amount: plan.amount * 100, // Amount in paise
+      amount: payableAmount * 100, // Amount in paise
       currency: "INR",
       receipt: `rcpt_${Date.now()}_${String(userId).slice(-4)}`,
       notes: {
         userId: String(userId),
         tier,
+        credit: String(credit),
+        remainingDays: String(remainingDays),
       },
     };
 
     const order = await razorpay.orders.create(options);
 
-    // Save initial PENDING transaction in DB
+    // Save initial PENDING transaction in DB with prorated details
     await Transaction.create({
       user: userId,
       orderId: order.id,
       tier,
-      amount: plan.amount,
+      amount: payableAmount,
       currency: "INR",
       status: "pending",
+      metadata: {
+        originalPrice,
+        credit,
+        remainingDays,
+      },
     });
 
     res.status(200).json({
       orderId: order.id,
       amount: order.amount,
+      payableAmount,
+      credit,
+      remainingDays,
       currency: order.currency,
       tier,
       keyId: process.env.RAZORPAY_KEY_ID,
@@ -108,7 +174,7 @@ export const verifyPayment = async (req, res) => {
       return res.status(200).json({ message: "Plan already upgraded!", user });
     }
 
-    // Dates calculation
+    // Dates calculation for new upgraded tier
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + plan.months);

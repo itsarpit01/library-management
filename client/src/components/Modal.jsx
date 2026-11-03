@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { CloseIcon } from "./Icons";
 
-export default function Modal({ title, onClose, children, maxWidth, style = {} }) {
+export default function Modal({ title, onClose, maxWidth, style, children }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -12,8 +12,11 @@ export default function Modal({ title, onClose, children, maxWidth, style = {} }
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
         className="modal"
+        style={{
+          ...(maxWidth ? { maxWidth, width: "95vw" } : {}),
+          ...style,
+        }}
         onMouseDown={(e) => e.stopPropagation()}
-        style={{ ...(maxWidth ? { maxWidth, width: "100%" } : {}), ...style }}
       >
         <div className="modal-head">
           <h3>{title}</h3>
