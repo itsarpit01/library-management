@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
-
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
@@ -9,10 +8,10 @@ import ReissueModal from "../components/ReissueModal";
 import Modal from "../components/Modal";
 import { PlusIcon, ReturnIcon, SearchIcon } from "../components/Icons";
 
-
 const TABS = [
   { key: "", label: "All" },
   { key: "issued", label: "Issued" },
+  { key: "reissue_requested", label: "Reissue Requests" },
   { key: "overdue", label: "Overdue" },
   { key: "returned", label: "Returned" },
 ];
@@ -29,7 +28,7 @@ export default function LibrarianIssues() {
   const [toReissue, setToReissue] = useState(null);
   const [returning, setReturning] = useState(false);
 
-  // ── Search & Date Range (client-side) ─────────────────────────────────────
+  // Search & Date Range (client-side)
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -37,27 +36,31 @@ export default function LibrarianIssues() {
   const filteredIssues = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
     return issues.filter((i) => {
+      if (tab === "reissue_requested" && !i.reissueRequested) return false;
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchTitle  = i.book?.title?.toLowerCase().includes(q);
+        const matchTitle = i.book?.title?.toLowerCase().includes(q);
         const matchAuthor = i.book?.author?.toLowerCase().includes(q);
-        const matchIsbn   = i.book?.isbn?.toLowerCase().includes(q);
+        const matchIsbn = i.book?.isbn?.toLowerCase().includes(q);
         const matchMember = i.member?.name?.toLowerCase().includes(q);
-        const matchEmail  = i.member?.email?.toLowerCase().includes(q);
+        const matchEmail = i.member?.email?.toLowerCase().includes(q);
         if (!matchTitle && !matchAuthor && !matchIsbn && !matchMember && !matchEmail) return false;
       }
       if (startDate || endDate) {
-        const d    = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
+        const d = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
         const from = startDate || "1970-01-01";
-        const to   = endDate   || todayStr;
+        const to = endDate || todayStr;
         if (d < from || d > to) return false;
       }
       return true;
     });
-  }, [issues, searchQuery, startDate, endDate]);
+  }, [issues, tab, searchQuery, startDate, endDate]);
 
-  const clearDateRange = () => { setStartDate(""); setEndDate(""); };
-  // ──────────────────────────────────────────────────────────────────────────
+  const clearDateRange = () => {
+    setStartDate("");
+    setEndDate("");
+  };
 
   const loadIssues = useCallback(async () => {
     setLoading(true);
@@ -78,7 +81,9 @@ export default function LibrarianIssues() {
 
   // Auto-refresh when librarian switches back to this tab
   useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") loadIssues(); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadIssues();
+    };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", loadIssues);
     return () => {
@@ -86,7 +91,6 @@ export default function LibrarianIssues() {
       window.removeEventListener("focus", loadIssues);
     };
   }, [loadIssues]);
-
 
   const handleIssued = () => {
     setShowForm(false);
@@ -336,13 +340,16 @@ export default function LibrarianIssues() {
                   <td>
                     {i.status === "issued" && (
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className={i.reissueRequested ? "btn btn-sm" : "btn btn-soft btn-sm"}
-                          onClick={() => setToReissue(i)}
-                          title={i.reissueRequested ? `Member requested extension till ${formatDate(i.reissueRequestedDate)}` : "Reissue book"}
-                        >
-                          {i.reissueRequested ? "Review Reissue" : "Reissue"}
-                        </button>
+                        {/* Strict Flow: Sirf tabhi dikhega jab member ne reissue request raise ki ho */}
+                        {i.reissueRequested && (
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => setToReissue(i)}
+                            title={`Member requested extension till ${formatDate(i.reissueRequestedDate)}`}
+                          >
+                            Review Reissue
+                          </button>
+                        )}
                         <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
                           <ReturnIcon size={16} /> Return
                         </button>

@@ -137,7 +137,6 @@ export default function LibrarianRequests() {
     });
   }, [requests, searchQuery, startDate, endDate]);
 
-  // Paginated requests calculation
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
   const paginatedRequests = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -507,27 +506,60 @@ export default function LibrarianRequests() {
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
+          {/* Direct First & Last Jump Pagination */}
           {totalPages > 1 && (
-            <div className="pagination" style={{ marginTop: 16 }}>
+            <div
+              className="pagination"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                marginTop: 16,
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage(1)}
+                title="Go to First Page"
+              >
+                « First
+              </button>
+
               <button
                 type="button"
                 className="btn btn-soft btn-sm"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                title="Previous Page"
               >
-                Previous
+                ‹ Prev
               </button>
-              <span>
+
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, padding: "0 8px" }}>
                 Page {page} of {totalPages}
               </span>
+
               <button
                 type="button"
                 className="btn btn-soft btn-sm"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                title="Next Page"
               >
-                Next
+                Next ›
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Go to Last Page"
+              >
+                Last »
               </button>
             </div>
           )}

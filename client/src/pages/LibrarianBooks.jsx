@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
@@ -24,13 +23,11 @@ export default function LibrarianBooks() {
   const [sort, setSort] = useState("-createdAt");
   const [page, setPage] = useState(1);
 
-  const [formBook, setFormBook] = useState(undefined); // undefined=band, null=add, object=edit
+  const [formBook, setFormBook] = useState(undefined);
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   const debouncedSearch = useDebounce(search);
-
-  // Sirf sabse latest request ka response use hoga
   const requestId = useRef(0);
 
   const loadBooks = useCallback(async () => {
@@ -42,7 +39,7 @@ export default function LibrarianBooks() {
       if (available) params.available = available;
 
       const res = await api.get("/books", { params });
-      if (myId !== requestId.current) return; // purana response, ignore
+      if (myId !== requestId.current) return;
       setBooks(res.data.data);
       setPagination(res.data.pagination);
     } catch (err) {
@@ -71,7 +68,6 @@ export default function LibrarianBooks() {
       await api.delete(`/books/${toDelete._id}`);
       toast.success("Book deleted");
       setToDelete(null);
-      // Last page ki akhri book delete ho to ek page peeche jao
       if (books.length === 1 && page > 1) setPage(page - 1);
       else loadBooks();
     } catch (err) {
@@ -164,24 +160,60 @@ export default function LibrarianBooks() {
         </div>
       )}
 
+      {/* Direct First & Last Jump Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="pagination">
+        <div
+          className="pagination"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            marginTop: 16,
+          }}
+        >
           <button
+            type="button"
             className="btn btn-soft btn-sm"
             disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
+            onClick={() => setPage(1)}
+            title="Go to First Page"
           >
-            Previous
+            « First
           </button>
-          <span>
+
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            title="Previous Page"
+          >
+            ‹ Prev
+          </button>
+
+          <span style={{ fontSize: "0.85rem", fontWeight: 600, padding: "0 8px" }}>
             Page {pagination.page} of {pagination.totalPages}
           </span>
+
           <button
+            type="button"
             className="btn btn-soft btn-sm"
             disabled={page >= pagination.totalPages}
-            onClick={() => setPage(page + 1)}
+            onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+            title="Next Page"
           >
-            Next
+            Next ›
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            disabled={page >= pagination.totalPages}
+            onClick={() => setPage(pagination.totalPages)}
+            title="Go to Last Page"
+          >
+            Last »
           </button>
         </div>
       )}

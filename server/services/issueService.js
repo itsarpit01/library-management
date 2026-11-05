@@ -80,6 +80,12 @@ export async function reissueIssue({ issueId, dueDate }) {
   if (!issue) throw httpError(404, "Issue record not found");
   if (issue.status !== "issued") throw httpError(400, "Book already returned");
 
+  // Strict User-Driven Flow Guard:
+  // Reissue tabhi ho sakta hai jab member ne pehle reissue request raise ki ho
+  if (!issue.reissueRequested) {
+    throw httpError(400, "Cannot reissue: Member has not requested a reissue for this book");
+  }
+
   const now = new Date();
   if (issue.dueDate < now) {
     throw httpError(400, "Overdue books must be returned first (fine applies)");
@@ -102,6 +108,7 @@ export async function reissueIssue({ issueId, dueDate }) {
     {
       _id: issue._id,
       status: "issued",
+      reissueRequested: true,
       dueDate: { $gte: now },
       reissueCount: { $not: { $gte: MAX_REISSUES } },
     },
@@ -115,7 +122,7 @@ export async function reissueIssue({ issueId, dueDate }) {
     },
     { new: true }
   );
-  if (!updated) throw httpError(409, "Issue changed, please try again");
+  if (!updated) throw httpError(409, "Issue changed or reissue request already processed, please try again");
 
   return populateIssue(Issue.findById(updated._id));
 }

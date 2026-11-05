@@ -8,7 +8,7 @@ import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { dateInput, formatDate, toDateInput } from "../utils/format";
 import { getEffectiveTier } from "../utils/membershipConfig";
 
-// mode: "direct" (librarian) ya "request" (purchaser)
+// mode: "direct" (librarian review) ya "request" (purchaser request)
 export default function ReissueModal({ issue, mode, onClose, onSaved }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -26,6 +26,22 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
 
   const currentDue = toDateInput(issue.dueDate);
 
+  // Librarian rejects member's reissue request directly from modal
+  const handleReject = async () => {
+    if (!window.confirm("Reject this member's reissue request?")) return;
+    setSaving(true);
+    setFormError("");
+    try {
+      await api.patch(`/issues/${issue._id}/reject-reissue`);
+      toast.success("Reissue request rejected");
+      onSaved();
+    } catch (err) {
+      setFormError(getErrorMessage(err, "Failed to reject reissue"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setFormError("");
@@ -41,7 +57,7 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
         toast.success("Reissue request sent to librarian");
       } else {
         await api.patch(`/issues/${issue._id}/reissue`, { dueDate });
-        toast.success("Book reissued successfully");
+        toast.success("Reissue approved successfully");
       }
       onSaved();
     } catch (err) {
@@ -53,8 +69,10 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
     }
   };
 
+  const modalTitle = isRequest ? "Request reissue" : "Review reissue request";
+
   return (
-    <Modal title={isRequest ? "Request reissue" : "Reissue book"} onClose={onClose}>
+    <Modal title={modalTitle} onClose={onClose}>
       <form onSubmit={submit} noValidate>
         {formError && <div className="alert-error">{formError}</div>}
 
@@ -77,7 +95,7 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
         </div>
 
         <div className="field" style={{ marginTop: 14 }}>
-          <label htmlFor="dueDate">{isRequest ? "Requested new return date" : "New return date"}</label>
+          <label htmlFor="dueDate">{isRequest ? "Requested new return date" : "Approved return date"}</label>
           <input
             id="dueDate"
             type="date"
@@ -98,13 +116,40 @@ export default function ReissueModal({ issue, mode, onClose, onSaved }) {
           )}
         </div>
 
-        <div className="modal-actions">
-          <button type="button" className="btn btn-soft" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn" disabled={saving}>
-            {saving ? "Saving..." : isRequest ? "Send reissue request" : "Confirm Reissue"}
-          </button>
+        <div
+          className="modal-actions"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 18,
+          }}
+        >
+          <div>
+            {!isRequest && issue.reissueRequested && (
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={handleReject}
+                disabled={saving}
+                style={{
+                  color: "var(--danger, #dc2626)",
+                  borderColor: "#fca5a5",
+                  background: "#fef2f2",
+                }}
+              >
+                Reject Request
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-soft" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={saving}>
+              {saving ? "Saving..." : isRequest ? "Send reissue request" : "Approve Reissue"}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

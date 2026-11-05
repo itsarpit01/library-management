@@ -24,7 +24,7 @@ export default function LibrarianUsers() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("");
-  const [activityFilter, setActivityFilter] = useState(""); // all, with_books, with_fines
+  const [activityFilter, setActivityFilter] = useState("");
 
   // Pagination (8 members per page)
   const PAGE_SIZE = 8;
@@ -73,7 +73,6 @@ export default function LibrarianUsers() {
   // Filtered list calculation
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
-      // 1. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = m.name?.toLowerCase().includes(q);
@@ -81,12 +80,10 @@ export default function LibrarianUsers() {
         if (!matchName && !matchEmail) return false;
       }
 
-      // 2. Tier Filter
       if (tierFilter && m.membership?.tier !== tierFilter) {
         return false;
       }
 
-      // 3. Activity Filter
       if (activityFilter === "with_books" && m.activeBooksCount <= 0) {
         return false;
       }
@@ -215,7 +212,7 @@ export default function LibrarianUsers() {
         </div>
       </div>
 
-      {/* Toolbar: Tier Tabs + Search + Activity Filter */}
+      {/* Toolbar */}
       <div
         className="toolbar"
         style={{
@@ -226,7 +223,6 @@ export default function LibrarianUsers() {
           marginBottom: 16,
         }}
       >
-        {/* Tier Tabs */}
         <div className="tabs" style={{ marginBottom: 0 }}>
           {TIER_TABS.map((t) => (
             <button
@@ -240,7 +236,6 @@ export default function LibrarianUsers() {
           ))}
         </div>
 
-        {/* Search */}
         <div style={{ position: "relative", minWidth: 220, flex: 1 }}>
           <span
             style={{
@@ -266,7 +261,6 @@ export default function LibrarianUsers() {
           />
         </div>
 
-        {/* Activity Filter Dropdown */}
         <select
           className="toolbar-input"
           value={activityFilter}
@@ -304,7 +298,6 @@ export default function LibrarianUsers() {
 
                 return (
                   <tr key={m._id}>
-                    {/* Member Info */}
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         {avatarSrc ? (
@@ -323,7 +316,6 @@ export default function LibrarianUsers() {
                       </div>
                     </td>
 
-                    {/* Tier */}
                     <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                         <div>{renderTierBadge(m.membership)}</div>
@@ -335,7 +327,6 @@ export default function LibrarianUsers() {
                       </div>
                     </td>
 
-                    {/* Issued Books */}
                     <td>
                       <span
                         className={`badge ${m.activeBooksCount > 0 ? "badge-primary" : "badge-secondary"}`}
@@ -345,7 +336,6 @@ export default function LibrarianUsers() {
                       </span>
                     </td>
 
-                    {/* Pending Requests */}
                     <td>
                       <span
                         className={`badge ${m.pendingRequestsCount > 0 ? "badge-warning" : "badge-secondary"}`}
@@ -355,17 +345,14 @@ export default function LibrarianUsers() {
                       </span>
                     </td>
 
-                    {/* Fines */}
                     <td>
                       <strong style={{ color: m.totalFines > 0 ? "#dc2626" : "#16a34a" }}>
                         ₹{m.totalFines}
                       </strong>
                     </td>
 
-                    {/* Joined Date */}
                     <td style={{ whiteSpace: "nowrap" }}>{formatDate(m.createdAt)}</td>
 
-                    {/* Action */}
                     <td>
                       <button
                         type="button"
@@ -381,27 +368,60 @@ export default function LibrarianUsers() {
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
+          {/* Direct First & Last Jump Pagination */}
           {totalPages > 1 && (
-            <div className="pagination" style={{ marginTop: 16 }}>
+            <div
+              className="pagination"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                marginTop: 16,
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage(1)}
+                title="Go to First Page"
+              >
+                « First
+              </button>
+
               <button
                 type="button"
                 className="btn btn-soft btn-sm"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                title="Previous Page"
               >
-                Previous
+                ‹ Prev
               </button>
-              <span>
+
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, padding: "0 8px" }}>
                 Page {page} of {totalPages}
               </span>
+
               <button
                 type="button"
                 className="btn btn-soft btn-sm"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                title="Next Page"
               >
-                Next
+                Next ›
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Go to Last Page"
+              >
+                Last »
               </button>
             </div>
           )}
@@ -415,7 +435,6 @@ export default function LibrarianUsers() {
             <p className="empty">Loading activity history...</p>
           ) : (
             <div>
-              {/* Member Overview Card */}
               <div
                 style={{
                   display: "flex",
@@ -454,7 +473,6 @@ export default function LibrarianUsers() {
                 </div>
               </div>
 
-              {/* Active Issued Books Section */}
               <h4 style={{ margin: "14px 0 8px 0" }}>Currently Borrowed Books</h4>
               {activityData?.issues?.filter((i) => i.status === "issued").length === 0 ? (
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
@@ -494,7 +512,6 @@ export default function LibrarianUsers() {
                 </div>
               )}
 
-              {/* Recent Requests Section */}
               <h4 style={{ margin: "14px 0 8px 0" }}>Recent Book Requests</h4>
               {activityData?.requests?.length === 0 ? (
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
