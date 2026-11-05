@@ -400,13 +400,13 @@ export default function Profile() {
                 <span>Active Account • {tier.tier === "free" ? "Free Lifetime Access" : "Active Subscription"}</span>
               </div>
 
-              {/* Live Borrowing & Request Capacity Meter */}
+                            {/* Live Borrowing & Request Capacity Meter */}
               <div style={{ background: "rgba(92, 107, 192, 0.05)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", fontWeight: 600, marginBottom: 6 }}>
-                  <span>Active Capacity</span>
+                  <span>{tier.tier === "ultimate" ? "Active Books" : "Active Capacity"}</span>
                   <span style={{ color: totalActiveSlots >= tier.maxBooks && tier.maxBooks !== Infinity ? "#dc2626" : "var(--primary, #5c6bc0)" }}>
                     {tier.tier === "ultimate"
-                      ? `${totalActiveSlots} active`
+                      ? `${activeBooksCount} issued`
                       : `${totalActiveSlots} / ${tier.maxBooks} slots`}
                   </span>
                 </div>
@@ -430,11 +430,17 @@ export default function Profile() {
                 )}
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-secondary, #666)", marginTop: tier.tier === "ultimate" ? 0 : 6 }}>
-                  <span>{activeBooksCount} issued • {activeRequestsCount} pending</span>
-                  {tier.tier !== "ultimate" && (
-                    <strong style={{ color: totalActiveSlots >= tier.maxBooks ? "#dc2626" : "#16a34a" }}>
-                      {remainingSlots} request slot(s) left
-                    </strong>
+                  {tier.tier === "ultimate" ? (
+                    <span style={{ color: "var(--text-secondary, #666)" }}>
+                      Unlimited Borrowing Capacity
+                    </span>
+                  ) : (
+                    <>
+                      <span>{activeBooksCount} issued • {activeRequestsCount} pending</span>
+                      <strong style={{ color: totalActiveSlots >= tier.maxBooks ? "#dc2626" : "#16a34a" }}>
+                        {remainingSlots} request slot(s) left
+                      </strong>
+                    </>
                   )}
                 </div>
               </div>

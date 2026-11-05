@@ -183,7 +183,8 @@ export default function AppLayout() {
                   color: isFull ? "#dc2626" : "var(--text, #333)",
                 }}
               >
-                {tier.tier === "ultimate" ? `${totalUsed} active` : `${totalUsed} / ${tier.maxBooks}`}
+                {/* Ultimate Plan me sirf active issued books ka count dikhega */}
+                {tier.tier === "ultimate" ? `${sidebarCapacity.active} issued` : `${totalUsed} / ${tier.maxBooks}`}
               </span>
             </div>
 
@@ -204,8 +205,9 @@ export default function AppLayout() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
               <span>
+                {/* Ultimate plan me pending slot reservation nahi hota, isliye 'Unlimited capacity' */}
                 {tier.tier === "ultimate"
-                  ? `${sidebarCapacity.active} issued • ${sidebarCapacity.pending} pending`
+                  ? "Unlimited capacity"
                   : isFull
                   ? "Limit Reached"
                   : `${remaining} slot(s) left`}
