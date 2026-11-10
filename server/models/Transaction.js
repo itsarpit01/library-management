@@ -19,14 +19,29 @@ const transactionSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    type: {
+      type: String,
+      enum: ["membership", "fine"],
+      default: "membership",
+      index: true,
+    },
     tier: {
       type: String,
-      enum: ["premium", "ultimate"],
-      required: true,
+      enum: ["premium", "ultimate", "fine"],
+      default: null,
+    },
+    issue: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Issue",
+      default: null,
+    },
+    bookTitle: {
+      type: String,
+      default: null,
     },
     amount: {
       type: Number,
-      required: true, // in INR (e.g. 499 or 999)
+      required: true, // in INR
     },
     currency: {
       type: String,

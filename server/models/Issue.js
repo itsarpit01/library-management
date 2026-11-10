@@ -10,14 +10,17 @@ const issueSchema = new mongoose.Schema(
     returnDate: { type: Date },
     status: { type: String, enum: ["issued", "returned"], default: "issued" },
     fine: { type: Number, default: 0, min: 0 },
+    finePaid: { type: Boolean, default: false },
+    finePaymentId: { type: String, default: null },
+    finePaidAt: { type: Date, default: null },
     reissueCount: { type: Number, default: 0, min: 0 },
-    reissueRequested: { type: Boolean, default: false }, // ← NEW
-    reissueRequestedDate: { type: Date },                 // ← NEW
+    reissueRequested: { type: Boolean, default: false },
+    reissueRequestedDate: { type: Date },
   },
   { timestamps: true }
 );
 
-// Ek member ek time par ek hi book ki ek active copy le sakta hai (DB level guard)
+// Ek member ek time par ek hi book ki ek active copy le sakta hai
 issueSchema.index(
   { book: 1, member: 1 },
   { unique: true, partialFilterExpression: { status: "issued" } }

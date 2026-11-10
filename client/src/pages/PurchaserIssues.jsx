@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
@@ -8,6 +9,7 @@ import Modal from "../components/Modal";
 import { SearchIcon, ReturnIcon } from "../components/Icons";
 
 export default function PurchaserIssues() {
+  const { user } = useAuth();
   const toast = useToast();
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +17,7 @@ export default function PurchaserIssues() {
   const [toReturn, setToReturn] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
   const [returning, setReturning] = useState(false);
+  const [payingFineId, setPayingFineId] = useState(null);
 
   // Search, Status, and Date Range Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +66,92 @@ export default function PurchaserIssues() {
       toast.error(getErrorMessage(err, "Failed to cancel reissue request"));
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  // Pay Fine Online via Razorpay
+  const handlePayFine = async (issue) => {
+    if (!window.Razorpay) {
+      toast.error("Razorpay SDK failed to load. Please refresh the page and try again.");
+      return;
+    }
+
+    setPayingFineId(issue._id);
+
+    try {
+      const res = await api.post("/payment/create-fine-order", { issueId: issue._id });
+      const { orderId, amount, currency, keyId, fine, bookTitle } = res.data;
+
+      window.dispatchEvent(new Event("quota-updated"));
+
+      const options = {
+        key: keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount,
+        currency: currency || "INR",
+        name: "LibraryHub",
+        description: `Late Fine Settlement: ${bookTitle} (₹${fine})`,
+        order_id: orderId,
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+        },
+        theme: {
+          color: "#dc2626",
+        },
+        handler: async function (response) {
+          try {
+            const verifyRes = await api.post("/payment/verify-fine", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              issueId: issue._id,
+            });
+
+            toast.success(verifyRes.data.message || `Fine of ₹${fine} paid successfully!`);
+            load();
+            window.dispatchEvent(new Event("quota-updated"));
+          } catch (err) {
+            toast.error(getErrorMessage(err));
+          } finally {
+            setPayingFineId(null);
+          }
+        },
+        modal: {
+          ondismiss: async function () {
+            try {
+              await api.post("/payment/mark-failed", {
+                orderId: orderId,
+                reason: "Fine payment popup closed by user",
+              });
+            } catch {
+              // ignore
+            }
+            window.dispatchEvent(new Event("quota-updated"));
+            setPayingFineId(null);
+          },
+        },
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+
+      razorpayInstance.on("payment.failed", async function (response) {
+        toast.error(`Payment failed: ${response.error?.description || "Something went wrong"}`);
+        try {
+          await api.post("/payment/mark-failed", {
+            orderId: orderId,
+            reason: response.error?.description || "Bank declined payment",
+          });
+        } catch {
+          // ignore
+        }
+        window.dispatchEvent(new Event("quota-updated"));
+        setPayingFineId(null);
+      });
+
+      razorpayInstance.open();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to start fine payment"));
+      setPayingFineId(null);
     }
   };
 
@@ -122,41 +211,31 @@ export default function PurchaserIssues() {
   };
 
   const statusBadge = (i) => {
-    if (i.status === "returned") {
-      return <span className="badge badge-success" style={{ whiteSpace: "nowrap" }}>Returned</span>;
-    }
-    if (i.isOverdue) {
-      return <span className="badge badge-danger" style={{ whiteSpace: "nowrap" }}>Overdue</span>;
-    }
+    if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
+    if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
     if (i.reissueRequested) {
       return (
         <span
           className="badge"
-          style={{
-            backgroundColor: "#fff7ed",
-            color: "#c2410c",
-            border: "1px solid #fdba74",
-            whiteSpace: "nowrap",
-            fontWeight: 600,
-          }}
+          style={{ backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffb74d" }}
         >
-          Reissue Pending
+          Reissue Requested
         </span>
       );
     }
-    return <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Issued</span>;
+    return <span className="badge badge-warning">Issued</span>;
   };
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h2>My Issues</h2>
+          <h2>My Issued Books</h2>
           <p>Books issued to you, return dates, and reissue requests.</p>
         </div>
       </div>
 
-      {/* Search & Date Range Toolbar */}
+      {/* Toolbar: Search, Status, and Date Range Filter */}
       <div
         className="toolbar"
         style={{
@@ -169,7 +248,7 @@ export default function PurchaserIssues() {
           marginBottom: 16,
         }}
       >
-        <div className="search-box" style={{ maxWidth: 240, minWidth: 180, flex: "0 1 240px" }}>
+        <div className="search-box" style={{ maxWidth: 240, minWidth: 170, flex: "0 1 240px" }}>
           <SearchIcon size={16} />
           <input
             placeholder="Search title, author..."
@@ -182,18 +261,7 @@ export default function PurchaserIssues() {
           className="toolbar-input"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            width: "auto",
-            minWidth: 140,
-            appearance: "none",
-            WebkitAppearance: "none",
-            MozAppearance: "none",
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6784' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "right 10px center",
-            paddingRight: 32,
-            cursor: "pointer",
-          }}
+          style={{ width: 140, flexShrink: 0 }}
         >
           <option value="">All Statuses</option>
           <option value="issued">Issued</option>
@@ -292,7 +360,44 @@ export default function PurchaserIssues() {
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(i.returnDate)}</td>
                   <td>{statusBadge(i)}</td>
-                  <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
+
+                  {/* Fine Column with Razorpay Pay Button */}
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {i.finePaid ? (
+                      <span
+                        className="badge badge-success"
+                        style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                        title={`Fine settled on ${formatDate(i.finePaidAt)}`}
+                      >
+                        Paid (₹{i.rawFine || i.fine})
+                      </span>
+                    ) : i.currentFine > 0 ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "#dc2626", fontWeight: 700 }}>₹{i.currentFine}</span>
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handlePayFine(i)}
+                          disabled={payingFineId === i._id}
+                          style={{
+                            padding: "3px 8px",
+                            fontSize: "0.72rem",
+                            background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                            color: "#fff",
+                            border: "none",
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            cursor: "pointer",
+                          }}
+                          title="Pay late fine online via Razorpay"
+                        >
+                          {payingFineId === i._id ? "Processing..." : "Pay Fine"}
+                        </button>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+
                   <td style={{ textAlign: "right" }}>
                     {i.status === "issued" && (
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>

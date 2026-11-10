@@ -400,7 +400,7 @@ export default function Profile() {
                 <span>Active Account • {tier.tier === "free" ? "Free Lifetime Access" : "Active Subscription"}</span>
               </div>
 
-                            {/* Live Borrowing & Request Capacity Meter */}
+              {/* Live Borrowing & Request Capacity Meter */}
               <div style={{ background: "rgba(92, 107, 192, 0.05)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", fontWeight: 600, marginBottom: 6 }}>
                   <span>{tier.tier === "ultimate" ? "Active Books" : "Active Capacity"}</span>
@@ -596,14 +596,14 @@ export default function Profile() {
         </form>
       </div>
 
-      {/* Card 4: Payment & Membership Transaction History */}
+      {/* Card 4: Payment & Transaction History (Supports Membership & Late Fine Payments) */}
       {user.role === "purchaser" && (
         <div className="card" style={{ marginTop: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
             <div>
-              <h3 style={{ margin: 0 }}>Payment & Membership History</h3>
+              <h3 style={{ margin: 0 }}>Payment & Transaction History</h3>
               <p style={{ margin: "2px 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
-                Track your membership purchases, payment status, and validity ranges.
+                Track your membership purchases, late fine settlements, and payment status.
               </p>
             </div>
 
@@ -632,10 +632,10 @@ export default function Profile() {
                 <thead>
                   <tr>
                     <th style={{ whiteSpace: "nowrap" }}>Date</th>
-                    <th style={{ whiteSpace: "nowrap" }}>Plan</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Type / Details</th>
                     <th style={{ whiteSpace: "nowrap" }}>Amount</th>
                     <th style={{ whiteSpace: "nowrap" }}>Status</th>
-                    <th style={{ whiteSpace: "nowrap" }}>Validity Period</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Validity / Purpose</th>
                     <th style={{ whiteSpace: "nowrap" }}>Transaction ID</th>
                   </tr>
                 </thead>
@@ -643,10 +643,36 @@ export default function Profile() {
                   {transactions.map((tx) => (
                     <tr key={tx._id}>
                       <td style={{ whiteSpace: "nowrap" }}>{formatDate(tx.createdAt)}</td>
+
+                      {/* Handles both Membership and Late Fine */}
                       <td style={{ whiteSpace: "nowrap", textTransform: "capitalize" }}>
-                        <strong>{tx.tier}</strong>
+                        {tx.type === "fine" ? (
+                          <div>
+                            <span
+                              className="badge"
+                              style={{
+                                background: "#fee2e2",
+                                color: "#b91c1c",
+                                fontSize: "0.72rem",
+                                padding: "2px 8px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Late Fine
+                            </span>
+                            {tx.bookTitle && (
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)", marginTop: 2 }}>
+                                {tx.bookTitle}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <strong>{tx.tier} Plan</strong>
+                        )}
                       </td>
-                      <td style={{ whiteSpace: "nowrap" }}>₹{tx.amount}</td>
+
+                      <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>₹{tx.amount}</td>
+
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span
                           className={`badge ${
@@ -661,8 +687,13 @@ export default function Profile() {
                           {tx.status}
                         </span>
                       </td>
+
                       <td style={{ whiteSpace: "nowrap" }}>
-                        {tx.startDate && tx.endDate ? (
+                        {tx.type === "fine" ? (
+                          <span style={{ fontSize: "0.8rem", color: "#16a34a", fontWeight: 600 }}>
+                            Fine Settled
+                          </span>
+                        ) : tx.startDate && tx.endDate ? (
                           <span>
                             {formatDate(tx.startDate)} &rarr; {formatDate(tx.endDate)}
                           </span>
@@ -670,6 +701,7 @@ export default function Profile() {
                           "-"
                         )}
                       </td>
+
                       <td style={{ whiteSpace: "nowrap", fontSize: "0.82rem", color: "var(--text-secondary, #666)" }}>
                         {tx.paymentId || tx.orderId}
                       </td>

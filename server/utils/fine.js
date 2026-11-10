@@ -10,14 +10,16 @@ export const calcFine = (dueDate, endDate = new Date()) => {
 
 // isOverdue, currentFine aur canReissue jodta hai
 export const withOverdueInfo = (issue) => {
-  const obj = issue.toObject();
+  const obj = typeof issue.toObject === "function" ? issue.toObject() : { ...issue };
   if (obj.status === "issued") {
     obj.isOverdue = new Date() > obj.dueDate;
-    obj.currentFine = calcFine(obj.dueDate);
+    obj.currentFine = obj.finePaid ? 0 : calcFine(obj.dueDate);
+    obj.rawFine = calcFine(obj.dueDate);
     obj.canReissue = !obj.isOverdue && (obj.reissueCount || 0) < MAX_REISSUES;
   } else {
     obj.isOverdue = false;
-    obj.currentFine = obj.fine;
+    obj.currentFine = obj.finePaid ? 0 : (obj.fine || 0);
+    obj.rawFine = obj.fine || 0;
     obj.canReissue = false;
   }
   return obj;
