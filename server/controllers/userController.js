@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Issue from "../models/Issue.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
+import Transaction from "../models/Transaction.js";
 import { MEMBERSHIP_TIERS } from "../config/membershipConfig.js";
 
 const getEffectiveMembership = (user) => {
@@ -28,18 +29,17 @@ const removeOldAvatar = (avatarPath) => {
   fs.unlink(path.join(process.cwd(), avatarPath), () => {});
 };
 
-// GET /api/users/members (librarian: all members with live issue/request/fine counts)
+// GET /api/users/members (librarian: all members sorted by most recent book purchase/issue/order)
 export const getMembers = async (req, res) => {
   try {
     const users = await User.find({ role: "purchaser" })
       .select("name email avatar createdAt membership")
-      .sort({ createdAt: -1 })
       .lean();
 
     const userIds = users.map((u) => u._id);
 
-    // Aggregate active issues count and total fines per user
-    const [issueStats, requestStats] = await Promise.all([
+    // Aggregate active issues, total fines, and latest book order/issue/payment activity per user
+    const [issueStats, requestStats, txStats] = await Promise.all([
       Issue.aggregate([
         { $match: { member: { $in: userIds } } },
         {
@@ -52,6 +52,7 @@ export const getMembers = async (req, res) => {
             overdueCount: {
               $sum: { $cond: [{ $eq: ["$status", "overdue"] }, 1, 0] },
             },
+            lastIssueDate: { $max: "$createdAt" },
           },
         },
       ]),
@@ -59,24 +60,52 @@ export const getMembers = async (req, res) => {
         {
           $match: {
             requestedBy: { $in: userIds },
-            status: { $in: ["pending", "counter_offered"] },
           },
         },
         {
           $group: {
             _id: "$requestedBy",
-            pendingRequestsCount: { $sum: 1 },
+            pendingRequestsCount: {
+              $sum: {
+                $cond: [{ $in: ["$status", ["pending", "counter_offered"]] }, 1, 0],
+              },
+            },
+            lastRequestDate: { $max: "$createdAt" },
+          },
+        },
+      ]),
+      Transaction.aggregate([
+        { $match: { user: { $in: userIds }, status: "success" } },
+        {
+          $group: {
+            _id: "$user",
+            lastTransactionDate: { $max: "$createdAt" },
           },
         },
       ]),
     ]);
 
     const issueMap = new Map(issueStats.map((item) => [String(item._id), item]));
-    const reqMap = new Map(requestStats.map((item) => [String(item._id), item.pendingRequestsCount]));
+    const reqMap = new Map(requestStats.map((item) => [String(item._id), item]));
+    const txMap = new Map(txStats.map((item) => [String(item._id), item]));
 
     const result = users.map((u) => {
       const stats = issueMap.get(String(u._id)) || {};
-      const pendingReqs = reqMap.get(String(u._id)) || 0;
+      const reqStats = reqMap.get(String(u._id)) || {};
+      const txStat = txMap.get(String(u._id)) || {};
+
+      // Determine the member's most recent interaction (order, issue, subscription, or join)
+      const candidateDates = [
+        u.createdAt,
+        u.membership?.startedAt,
+        stats.lastIssueDate,
+        reqStats.lastRequestDate,
+        txStat.lastTransactionDate,
+      ].filter(Boolean);
+
+      const lastActivityAt = candidateDates.length
+        ? new Date(Math.max(...candidateDates.map((d) => new Date(d).getTime())))
+        : u.createdAt;
 
       return {
         _id: u._id,
@@ -86,12 +115,18 @@ export const getMembers = async (req, res) => {
         role: "purchaser",
         membership: getEffectiveMembership(u),
         createdAt: u.createdAt,
+        lastActivityAt,
         activeBooksCount: stats.activeIssuesCount || 0,
-        pendingRequestsCount: pendingReqs,
+        pendingRequestsCount: reqStats.pendingRequestsCount || 0,
         totalFines: stats.totalFines || 0,
         overdueCount: stats.overdueCount || 0,
       };
     });
+
+    // Default Sort: Jisne recently book issue/order/use kiya hai wo sabse top par
+    result.sort(
+      (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
+    );
 
     res.json(result);
   } catch (error) {

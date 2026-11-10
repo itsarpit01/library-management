@@ -21,10 +21,11 @@ export default function LibrarianUsers() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("");
   const [activityFilter, setActivityFilter] = useState("");
+  const [sortBy, setSortBy] = useState("recent_activity"); // Default: Recent activity/order first
 
   // Pagination (8 members per page)
   const PAGE_SIZE = 8;
@@ -51,10 +52,10 @@ export default function LibrarianUsers() {
     loadMembers();
   }, [loadMembers]);
 
-  // Reset pagination on filter change
+  // Reset pagination on filter or sort change
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, tierFilter, activityFilter]);
+  }, [searchQuery, tierFilter, activityFilter, sortBy]);
 
   // Open detailed member activity modal
   const openActivity = async (member) => {
@@ -70,9 +71,9 @@ export default function LibrarianUsers() {
     }
   };
 
-  // Filtered list calculation
-  const filteredMembers = useMemo(() => {
-    return members.filter((m) => {
+  // Filtered and Sorted list calculation
+  const filteredAndSortedMembers = useMemo(() => {
+    const filtered = members.filter((m) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = m.name?.toLowerCase().includes(q);
@@ -93,14 +94,32 @@ export default function LibrarianUsers() {
 
       return true;
     });
-  }, [members, searchQuery, tierFilter, activityFilter]);
+
+    // Sort order logic
+    const sorted = [...filtered];
+    if (sortBy === "recent_activity") {
+      sorted.sort(
+        (a, b) =>
+          new Date(b.lastActivityAt || b.createdAt).getTime() -
+          new Date(a.lastActivityAt || a.createdAt).getTime()
+      );
+    } else if (sortBy === "joined") {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sortBy === "books") {
+      sorted.sort((a, b) => (b.activeBooksCount || 0) - (a.activeBooksCount || 0));
+    } else if (sortBy === "fines") {
+      sorted.sort((a, b) => (b.totalFines || 0) - (a.totalFines || 0));
+    }
+
+    return sorted;
+  }, [members, searchQuery, tierFilter, activityFilter, sortBy]);
 
   // Paginated slice
-  const totalPages = Math.max(1, Math.ceil(filteredMembers.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedMembers.length / PAGE_SIZE));
   const paginatedMembers = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return filteredMembers.slice(start, start + PAGE_SIZE);
-  }, [filteredMembers, page]);
+    return filteredAndSortedMembers.slice(start, start + PAGE_SIZE);
+  }, [filteredAndSortedMembers, page]);
 
   // Quick Stats
   const totalCount = members.length;
@@ -212,7 +231,7 @@ export default function LibrarianUsers() {
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar with Tier Tabs, Search, Filter, and Sort */}
       <div
         className="toolbar"
         style={{
@@ -271,12 +290,26 @@ export default function LibrarianUsers() {
           <option value="with_books">With Active Books</option>
           <option value="with_fines">With Unpaid Fines</option>
         </select>
+
+        {/* Sort selector defaulting to Recent Activity */}
+        <select
+          className="toolbar-input"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          style={{ width: "auto", fontWeight: 600 }}
+          title="Change sorting order"
+        >
+          <option value="recent_activity">Sort: Recent Book Order / Activity</option>
+          <option value="joined">Sort: Recently Joined</option>
+          <option value="books">Sort: Most Active Books</option>
+          <option value="fines">Sort: Highest Fines</option>
+        </select>
       </div>
 
       {/* Members Table */}
       {loading ? (
         <p className="empty">Loading members...</p>
-      ) : filteredMembers.length === 0 ? (
+      ) : filteredAndSortedMembers.length === 0 ? (
         <p className="empty">No members matching your filters.</p>
       ) : (
         <div className="table-wrap">
@@ -288,7 +321,7 @@ export default function LibrarianUsers() {
                 <th>Issued Books</th>
                 <th>Pending Requests</th>
                 <th>Fines Due</th>
-                <th>Joined</th>
+                <th>Recent Activity</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -351,13 +384,24 @@ export default function LibrarianUsers() {
                       </strong>
                     </td>
 
-                    <td style={{ whiteSpace: "nowrap" }}>{formatDate(m.createdAt)}</td>
+                    {/* Recent Activity and Joined Date */}
+                    <td>
+                      <div>
+                        <strong>{formatDate(m.lastActivityAt || m.createdAt)}</strong>
+                        <span
+                          className="cell-sub"
+                          style={{ fontSize: "0.72rem", color: "var(--text-secondary, #6b7280)", marginTop: 2 }}
+                        >
+                          Joined: {formatDate(m.createdAt)}
+                        </span>
+                      </div>
+                    </td>
 
                     <td>
                       <button
-                        type="button"
                         className="btn btn-soft btn-sm"
                         onClick={() => openActivity(m)}
+                        style={{ whiteSpace: "nowrap" }}
                       >
                         View Activity
                       </button>
@@ -367,79 +411,70 @@ export default function LibrarianUsers() {
               })}
             </tbody>
           </table>
-
-          {/* Direct First & Last Jump Pagination */}
-          {totalPages > 1 && (
-            <div
-              className="pagination"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                marginTop: 16,
-              }}
-            >
-              <button
-                type="button"
-                className="btn btn-soft btn-sm"
-                disabled={page <= 1}
-                onClick={() => setPage(1)}
-                title="Go to First Page"
-              >
-                « First
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-soft btn-sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                title="Previous Page"
-              >
-                ‹ Prev
-              </button>
-
-              <span style={{ fontSize: "0.85rem", fontWeight: 600, padding: "0 8px" }}>
-                Page {page} of {totalPages}
-              </span>
-
-              <button
-                type="button"
-                className="btn btn-soft btn-sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                title="Next Page"
-              >
-                Next ›
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-soft btn-sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage(totalPages)}
-                title="Go to Last Page"
-              >
-                Last »
-              </button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Member Activity & Details Modal */}
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage(1)}
+            disabled={page <= 1}
+            title="First Page"
+          >
+            « First
+          </button>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            ‹ Prev
+          </button>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)", margin: "0 8px" }}>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Next ›
+          </button>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage(totalPages)}
+            disabled={page >= totalPages}
+            title="Last Page"
+          >
+            Last »
+          </button>
+        </div>
+      )}
+
+      {/* Detailed Member Activity Modal */}
       {selectedMember && (
-        <Modal title="Member Record & Activity" onClose={() => setSelectedMember(null)} maxWidth="740px">
+        <Modal
+          title={`Member Activity: ${selectedMember.name}`}
+          onClose={() => {
+            setSelectedMember(null);
+            setActivityData(null);
+          }}
+          maxWidth="680px"
+        >
           {activityLoading ? (
-            <p className="empty">Loading activity history...</p>
+            <p className="empty">Loading member history...</p>
+          ) : !activityData ? (
+            <p className="empty">No activity data found.</p>
           ) : (
             <div>
+              {/* Member overview banner */}
               <div
                 style={{
                   display: "flex",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  gap: 14,
                   padding: "12px 14px",
                   background: "var(--card-bg, #f9fafb)",
                   borderRadius: 10,
@@ -447,112 +482,88 @@ export default function LibrarianUsers() {
                   marginBottom: 16,
                 }}
               >
-                {selectedMember.avatar ? (
-                  <img
-                    src={`${SERVER_URL}${selectedMember.avatar}`}
-                    alt=""
-                    style={{ width: 50, height: 50, borderRadius: "50%", objectFit: "cover" }}
-                  />
-                ) : (
-                  <span className="avatar avatar-lg">{selectedMember.name?.[0]?.toUpperCase()}</span>
-                )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <h3 style={{ margin: 0 }}>{selectedMember.name}</h3>
-                    {renderTierBadge(selectedMember.membership)}
+                <div>
+                  <div style={{ fontSize: "1rem", fontWeight: 700 }}>{activityData.member?.name}</div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)" }}>
+                    {activityData.member?.email}
                   </div>
-                  <span className="cell-sub">{selectedMember.email}</span>
                 </div>
-                <div style={{ textAlign: "right", fontSize: "0.8rem", color: "var(--text-secondary, #666)" }}>
-                  <div>Joined on {formatDate(selectedMember.createdAt)}</div>
-                  {selectedMember.membership?.expiresAt && (
-                    <div style={{ color: "#4f46e5", fontWeight: 600 }}>
-                      Plan expires: {formatDate(selectedMember.membership.expiresAt)}
+                <div>{renderTierBadge(activityData.member?.membership)}</div>
+              </div>
+
+              {/* Currently Borrowed Books */}
+              <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem" }}>
+                Current & Past Issues ({activityData.issues?.length || 0})
+              </h4>
+              {(!activityData.issues || activityData.issues.length === 0) ? (
+                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #888)", marginBottom: 16 }}>
+                  No books issued to this member yet.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18, maxHeight: 180, overflowY: "auto" }}>
+                  {activityData.issues.map((i) => (
+                    <div
+                      key={i._id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        border: "1px solid var(--border, #e5e7eb)",
+                        borderRadius: 8,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <div>
+                        <strong>{i.book?.title}</strong>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                          Issued: {formatDate(i.issueDate)} | Due: {formatDate(i.dueDate)}
+                        </div>
+                      </div>
+                      <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
+                        {i.status}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <h4 style={{ margin: "14px 0 8px 0" }}>Currently Borrowed Books</h4>
-              {activityData?.issues?.filter((i) => i.status === "issued").length === 0 ? (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
-                  No books currently issued to this member.
-                </p>
-              ) : (
-                <div className="table-wrap" style={{ marginBottom: 16 }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Book Title</th>
-                        <th>Issued Date</th>
-                        <th>Due Date</th>
-                        <th>Fine</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activityData?.issues
-                        ?.filter((i) => i.status === "issued")
-                        .map((issue) => (
-                          <tr key={issue._id}>
-                            <td>
-                              <strong>{issue.book?.title}</strong>
-                              <span className="cell-sub">{issue.book?.author}</span>
-                            </td>
-                            <td>{formatDate(issue.issueDate)}</td>
-                            <td>{formatDate(issue.dueDate)}</td>
-                            <td>
-                              <span style={{ color: issue.fine > 0 ? "#dc2626" : "inherit", fontWeight: 600 }}>
-                                ₹{issue.fine}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                  ))}
                 </div>
               )}
 
-              <h4 style={{ margin: "14px 0 8px 0" }}>Recent Book Requests</h4>
-              {activityData?.requests?.length === 0 ? (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
-                  No request history found for this member.
+              {/* Purchase & Borrow Requests */}
+              <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem" }}>
+                Purchase & Borrow Requests ({activityData.requests?.length || 0})
+              </h4>
+              {(!activityData.requests || activityData.requests.length === 0) ? (
+                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #888)", marginBottom: 16 }}>
+                  No purchase or borrow requests submitted by this member.
                 </p>
               ) : (
-                <div className="table-wrap" style={{ maxHeight: 200, overflowY: "auto" }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Book</th>
-                        <th>Requested Date</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activityData?.requests?.slice(0, 5).map((r) => (
-                        <tr key={r._id}>
-                          <td>{r.title}</td>
-                          <td>{formatDate(r.createdAt)}</td>
-                          <td>
-                            <span className="badge" style={{ textTransform: "capitalize" }}>
-                              {r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
+                  {activityData.requests.map((r) => (
+                    <div
+                      key={r._id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        border: "1px solid var(--border, #e5e7eb)",
+                        borderRadius: 8,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <div>
+                        <strong>{r.title}</strong>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                          Requested: {formatDate(r.createdAt)}
+                        </div>
+                      </div>
+                      <span className={`badge badge-${r.status}`}>
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              <div className="modal-actions" style={{ marginTop: 20 }}>
-                <button
-                  type="button"
-                  className="btn btn-soft"
-                  onClick={() => setSelectedMember(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           )}
         </Modal>
