@@ -10,7 +10,7 @@ import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import { getEffectiveTier } from "../utils/membershipConfig";
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 const emptyPw = { currentPassword: "", newPassword: "", confirmPassword: "" };
 
 export default function Profile() {
