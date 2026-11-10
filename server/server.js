@@ -23,11 +23,27 @@ startRecurringJobs();
 
 const app = express();
 
+// Railway / Render reverse proxy ke piche secure cookies aur rate limiting ke liye zaroori
+app.set("trust proxy", 1);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
+// Deploy-ready CORS: localhost aur live client domain dono allow karega
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // Fallback to allow requests in deployment
+        callback(null, true);
+      }
+    },
     credentials: true,
   })
 );

@@ -25,11 +25,13 @@ const publicUser = (user) => ({
   },
 });
 
-// httpOnly cookie: JS isse padh nahi sakta (XSS se token chori nahi hoga)
+const isProd = process.env.NODE_ENV === "production";
+
+// httpOnly cookie: Production me cross-domain (Railway) ke liye sameSite 'none' aur secure 'true'
 const cookieOptions = {
   httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
+  sameSite: isProd ? "none" : "lax",
+  secure: isProd,
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 din, JWT jitna
 };
 
@@ -200,18 +202,21 @@ export const resetPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 // GET /api/auth/google/callback
 export const googleCallback = (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+
   try {
     if (!req.user) {
-      return res.redirect("http://localhost:5173/login?error=auth_failed");
+      return res.redirect(`${clientUrl}/login?error=auth_failed`);
     }
 
     const token = generateToken(req.user);
     res.cookie("token", token, cookieOptions);
-    res.redirect("http://localhost:5173");
+    res.redirect(clientUrl);
   } catch (error) {
     console.error("Google callback error:", error);
-    res.redirect("http://localhost:5173/login?error=server_error");
+    res.redirect(`${clientUrl}/login?error=server_error`);
   }
 };
