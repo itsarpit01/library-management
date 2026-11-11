@@ -332,7 +332,7 @@ export const requestAccountDeletion = async (req, res) => {
     await sendAccountDeletionEmail(user.email, user.name, user._id, rawToken);
 
     res.json({
-      message: `A verification link has been sent to ${user.email}. Please check your inbox within 15 minutes to confirm deletion.`,
+      message: "A verification link has been sent to your registered email address. Please check your inbox within 15 minutes to confirm deletion.",
     });
   } catch (err) {
     res.status(500).json({ message: err.message || "Failed to initiate account deletion" });

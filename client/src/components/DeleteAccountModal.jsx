@@ -3,7 +3,7 @@ import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 
-export default function DeleteAccountModal({ onClose, userEmail }) {
+export default function DeleteAccountModal({ onClose }) {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,7 +67,7 @@ export default function DeleteAccountModal({ onClose, userEmail }) {
       const res = await api.post("/users/request-account-deletion");
       toast.success(
         res.data.message ||
-          `Verification email sent to ${userEmail}. Please check your inbox.`
+          "Verification link sent to your registered email address. Please check your inbox."
       );
       onClose();
     } catch (err) {
@@ -209,7 +209,7 @@ export default function DeleteAccountModal({ onClose, userEmail }) {
           <div>
             <p style={{ fontSize: "0.88rem", color: "var(--text, #333)", lineHeight: 1.5, margin: "0 0 14px 0" }}>
               To permanently close your LibraryHub account, we will send a secure verification link to{" "}
-              <strong>{userEmail}</strong>.
+              <strong>your registered email address</strong>.
             </p>
 
             <div
