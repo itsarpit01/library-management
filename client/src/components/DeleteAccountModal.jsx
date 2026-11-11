@@ -65,17 +65,10 @@ export default function DeleteAccountModal({ onClose }) {
     setSubmitting(true);
     try {
       const res = await api.post("/users/request-account-deletion");
-      if (res.data.confirmUrl) {
-        toast.success("Verification link generated! Redirecting to confirmation page...");
-        setTimeout(() => {
-          window.location.href = res.data.confirmUrl;
-        }, 1200);
-      } else {
-        toast.success(
-          res.data.message ||
-            "A verification link has been sent to your registered email address. Please check your inbox."
-        );
-      }
+      toast.success(
+        res.data.message ||
+          "A verification link has been sent to your registered email address. Please check your inbox."
+      );
       onClose();
     } catch (err) {
       toast.error(getErrorMessage(err));

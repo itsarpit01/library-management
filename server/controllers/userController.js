@@ -329,23 +329,19 @@ export const requestAccountDeletion = async (req, res) => {
     user.accountDeleteExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await user.save();
 
-    const clientUrl = process.env.CLIENT_URL || "https://library-management-iota-two.vercel.app";
-    const confirmUrl = `${clientUrl}/delete-account-confirm?token=${rawToken}`;
-
+    // Send email strictly to inbox (No direct confirmUrl returned)
     try {
       await sendAccountDeletionEmail(user.email, user.name, user._id, rawToken);
-      res.json({
-        message: "A verification link has been sent to your registered email address. Please check your inbox within 15 minutes to confirm deletion.",
-      });
     } catch (mailError) {
-      console.warn("Railway blocked direct SMTP socket. Magic Link generated for user:", confirmUrl);
-
-      // Agar Railway SMTP port block kar raha hai, to user flow break nahi hoga
-      res.json({
-        message: "Verification link generated. Redirecting to confirmation page...",
-        confirmUrl: confirmUrl,
+      console.error("Email send failed:", mailError);
+      return res.status(500).json({
+        message: `Failed to deliver email: ${mailError.message}. Please check your email settings.`,
       });
     }
+
+    res.json({
+      message: "A verification link has been sent to your registered email address. Please check your inbox within 15 minutes to confirm deletion.",
+    });
   } catch (err) {
     res.status(500).json({ message: err.message || "Failed to initiate account deletion" });
   }
