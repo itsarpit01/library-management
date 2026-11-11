@@ -3,122 +3,136 @@ import api from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
-import IssueFormModal from "../components/IssueFormModal";
-import ReissueModal from "../components/ReissueModal";
 import Modal from "../components/Modal";
-import { PlusIcon, ReturnIcon, SearchIcon } from "../components/Icons";
+import { SearchIcon } from "../components/Icons";
 
-const TABS = [
-  { key: "", label: "All" },
-  { key: "issued", label: "Issued" },
-  { key: "reissue_requested", label: "Reissue Requests" },
-  { key: "overdue", label: "Overdue" },
-  { key: "returned", label: "Returned" },
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
+
+const TIER_TABS = [
+  { key: "", label: "All Plans" },
+  { key: "free", label: "Free" },
+  { key: "premium", label: "Premium" },
+  { key: "ultimate", label: "Ultimate" },
 ];
 
-export default function LibrarianIssues() {
+export default function LibrarianUsers() {
   const toast = useToast();
 
-  const [issues, setIssues] = useState([]);
-  const [tab, setTab] = useState("");
+  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [showForm, setShowForm] = useState(false);
-  const [toReturn, setToReturn] = useState(null);
-  const [toReissue, setToReissue] = useState(null);
-  const [returning, setReturning] = useState(false);
-
-  // Search & Date Range (client-side)
+  // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [tierFilter, setTierFilter] = useState("");
+  const [activityFilter, setActivityFilter] = useState("");
+  const [sortBy, setSortBy] = useState("recent_activity"); // Default: Recent activity/order first
 
-  const filteredIssues = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return issues.filter((i) => {
-      if (tab === "reissue_requested" && !i.reissueRequested) return false;
+  // Pagination (8 members per page)
+  const PAGE_SIZE = 8;
+  const [page, setPage] = useState(1);
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = i.book?.title?.toLowerCase().includes(q);
-        const matchAuthor = i.book?.author?.toLowerCase().includes(q);
-        const matchIsbn = i.book?.isbn?.toLowerCase().includes(q);
-        const matchMember = i.member?.name?.toLowerCase().includes(q);
-        const matchEmail = i.member?.email?.toLowerCase().includes(q);
-        if (!matchTitle && !matchAuthor && !matchIsbn && !matchMember && !matchEmail) return false;
-      }
-      if (startDate || endDate) {
-        const d = i.issueDate ? new Date(i.issueDate).toISOString().slice(0, 10) : "";
-        const from = startDate || "1970-01-01";
-        const to = endDate || todayStr;
-        if (d < from || d > to) return false;
-      }
-      return true;
-    });
-  }, [issues, tab, searchQuery, startDate, endDate]);
+  // Detailed Activity Modal & Accordion State
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityData, setActivityData] = useState(null);
+  const [activeAccordion, setActiveAccordion] = useState("issues"); // "issues" | "requests"
 
-  const clearDateRange = () => {
-    setStartDate("");
-    setEndDate("");
-  };
-
-  const loadIssues = useCallback(async () => {
+  const loadMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const params = tab ? { status: tab } : {};
-      const res = await api.get("/issues", { params });
-      setIssues(Array.isArray(res.data) ? res.data : res.data.data || []);
+      const res = await api.get("/users/members");
+      setMembers(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [tab, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    loadIssues();
-  }, [loadIssues]);
+    loadMembers();
+  }, [loadMembers]);
 
-  // Auto-refresh when librarian switches back to this tab
+  // Reset pagination on filter or sort change
   useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") loadIssues();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", loadIssues);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", loadIssues);
-    };
-  }, [loadIssues]);
+    setPage(1);
+  }, [searchQuery, tierFilter, activityFilter, sortBy]);
 
-  const handleIssued = () => {
-    setShowForm(false);
-    loadIssues();
-  };
-
-  const handleReissued = () => {
-    setToReissue(null);
-    loadIssues();
-  };
-
-  const confirmReturn = async () => {
-    setReturning(true);
+  // Open detailed member activity modal (resets accordion to "issues" by default)
+  const openActivity = async (member) => {
+    setSelectedMember(member);
+    setActiveAccordion("issues");
+    setActivityLoading(true);
     try {
-      const res = await api.patch(`/issues/${toReturn._id}/return`);
-      const fine = res.data.fine ?? res.data.currentFine ?? 0;
-      toast.success(fine > 0 ? `Book returned. Fine: ₹${fine}` : "Book returned");
-      setToReturn(null);
-      loadIssues();
+      const res = await api.get(`/users/members/${member._id}/activity`);
+      setActivityData(res.data);
     } catch (err) {
       toast.error(getErrorMessage(err));
-      setToReturn(null);
     } finally {
-      setReturning(false);
+      setActivityLoading(false);
     }
   };
 
-  // Helper to render member tier badge (Clean SVGs, No Emojis)
+  // Filtered and Sorted list calculation
+  const filteredAndSortedMembers = useMemo(() => {
+    const filtered = members.filter((m) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = m.name?.toLowerCase().includes(q);
+        const matchEmail = m.email?.toLowerCase().includes(q);
+        if (!matchName && !matchEmail) return false;
+      }
+
+      if (tierFilter && m.membership?.tier !== tierFilter) {
+        return false;
+      }
+
+      if (activityFilter === "with_books" && m.activeBooksCount <= 0) {
+        return false;
+      }
+      if (activityFilter === "with_fines" && m.totalFines <= 0) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Sort order logic
+    const sorted = [...filtered];
+    if (sortBy === "recent_activity") {
+      sorted.sort(
+        (a, b) =>
+          new Date(b.lastActivityAt || b.createdAt).getTime() -
+          new Date(a.lastActivityAt || a.createdAt).getTime()
+      );
+    } else if (sortBy === "joined") {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sortBy === "books") {
+      sorted.sort((a, b) => (b.activeBooksCount || 0) - (a.activeBooksCount || 0));
+    } else if (sortBy === "fines") {
+      sorted.sort((a, b) => (b.totalFines || 0) - (a.totalFines || 0));
+    }
+
+    return sorted;
+  }, [members, searchQuery, tierFilter, activityFilter, sortBy]);
+
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedMembers.length / PAGE_SIZE));
+  const paginatedMembers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredAndSortedMembers.slice(start, start + PAGE_SIZE);
+  }, [filteredAndSortedMembers, page]);
+
+  // Quick Stats
+  const totalCount = members.length;
+  const paidCount = members.filter((m) => ["premium", "ultimate"].includes(m.membership?.tier)).length;
+  const borrowingCount = members.filter((m) => m.activeBooksCount > 0).length;
+  const finesTotal = members.reduce((sum, m) => sum + (m.totalFines || 0), 0);
+
   const renderTierBadge = (membership) => {
     const tier = membership?.tier || "free";
     if (tier === "ultimate") {
@@ -128,17 +142,11 @@ export default function LibrarianIssues() {
           style={{
             background: "linear-gradient(135deg, #f59e0b, #d97706)",
             color: "#fff",
-            fontSize: "0.72rem",
             fontWeight: 700,
-            padding: "2px 7px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
+            fontSize: "0.72rem",
+            padding: "3px 9px",
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-          </svg>
           Ultimate
         </span>
       );
@@ -150,17 +158,11 @@ export default function LibrarianIssues() {
           style={{
             background: "linear-gradient(135deg, #6366f1, #4338ca)",
             color: "#fff",
-            fontSize: "0.72rem",
             fontWeight: 700,
-            padding: "2px 7px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
+            fontSize: "0.72rem",
+            padding: "3px 9px",
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
           Premium
         </span>
       );
@@ -170,10 +172,10 @@ export default function LibrarianIssues() {
         className="badge"
         style={{
           background: "var(--card-bg, #f3f4f6)",
-          color: "var(--text-secondary, #6b7280)",
+          color: "#4b5563",
           fontSize: "0.72rem",
+          padding: "3px 9px",
           border: "1px solid var(--border, #d1d5db)",
-          padding: "2px 7px",
         }}
       >
         Free
@@ -181,218 +183,502 @@ export default function LibrarianIssues() {
     );
   };
 
-  const statusBadge = (i) => {
-    if (i.status === "returned") return <span className="badge badge-success">Returned</span>;
-    if (i.isOverdue) return <span className="badge badge-danger">Overdue</span>;
-    if (i.reissueRequested) {
-      return (
-        <span className="badge" style={{ backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffb74d" }}>
-          Reissue Requested
-        </span>
-      );
-    }
-    if (i.reissueCount > 0) {
-      return (
-        <span
-          className="badge"
-          style={{ backgroundColor: "var(--primary-subtle, #ede7f6)", color: "var(--primary, #5c6bc0)", border: "1px solid var(--primary, #5c6bc0)" }}
-        >
-          Reissued
-        </span>
-      );
-    }
-    return <span className="badge badge-warning">Issued</span>;
-  };
-
   return (
     <>
       <div className="page-head">
         <div>
-          <h2>Issue / Return</h2>
-          <p>Issue books to members and take them back.</p>
+          <h2>Member Records</h2>
+          <p>Inspect registered library members, active subscriptions, and borrowing activity.</p>
         </div>
-        <button className="btn" onClick={() => setShowForm(true)}>
-          <PlusIcon size={18} /> Issue book
-        </button>
       </div>
 
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`tab ${tab === t.key ? "active" : ""}`}
-            onClick={() => setTab(t.key)}
+      {/* Summary KPI Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: 14,
+          marginBottom: 20,
+        }}
+      >
+        <div className="card" style={{ padding: "14px 16px" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)" }}>Total Members</span>
+          <div style={{ fontSize: "1.6rem", fontWeight: "bold", marginTop: 4 }}>{totalCount}</div>
+        </div>
+
+        <div className="card" style={{ padding: "14px 16px" }}>
+          <span style={{ fontSize: "0.8rem", color: "#4f46e5" }}>Active Paid Plans</span>
+          <div style={{ fontSize: "1.6rem", fontWeight: "bold", color: "#4f46e5", marginTop: 4 }}>
+            {paidCount}
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: "14px 16px" }}>
+          <span style={{ fontSize: "0.8rem", color: "#16a34a" }}>Currently Borrowing</span>
+          <div style={{ fontSize: "1.6rem", fontWeight: "bold", color: "#16a34a", marginTop: 4 }}>
+            {borrowingCount}
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: "14px 16px" }}>
+          <span style={{ fontSize: "0.8rem", color: finesTotal > 0 ? "#dc2626" : "var(--text-secondary, #666)" }}>
+            Total Unpaid Fines
+          </span>
+          <div
+            style={{
+              fontSize: "1.6rem",
+              fontWeight: "bold",
+              color: finesTotal > 0 ? "#dc2626" : "var(--text, #333)",
+              marginTop: 4,
+            }}
           >
-            {t.label}
-          </button>
-        ))}
+            ₹{finesTotal}
+          </div>
+        </div>
       </div>
 
-      {/* Search & Date Range Toolbar */}
+      {/* Toolbar with Tier Tabs, Search, Filter, and Sort */}
       <div
         className="toolbar"
         style={{
           display: "flex",
-          gap: 10,
+          gap: 12,
           alignItems: "center",
-          flexWrap: "nowrap",
-          overflowX: "auto",
-          paddingBottom: 4,
+          flexWrap: "wrap",
           marginBottom: 16,
         }}
       >
-        <div className="search-box" style={{ maxWidth: 260, minWidth: 180, flex: "0 1 260px" }}>
-          <SearchIcon size={16} />
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          {TIER_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`tab ${tierFilter === t.key ? "active" : ""}`}
+              onClick={() => setTierFilter(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ position: "relative", minWidth: 220, flex: 1 }}>
+          <span
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-secondary, #9ca3af)",
+              display: "flex",
+              alignItems: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <SearchIcon size={16} />
+          </span>
           <input
-            placeholder="Search book, member, ISBN..."
+            type="text"
+            className="toolbar-input"
+            placeholder="Search member by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: 32, width: "100%" }}
           />
         </div>
 
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            flexWrap: "nowrap",
-            whiteSpace: "nowrap",
-            background: "var(--card-bg, #f9fafb)",
-            padding: "4px 8px",
-            borderRadius: 8,
-            border: "1px solid var(--border, #e5e7eb)",
-            flexShrink: 0,
-          }}
+        <select
+          className="toolbar-input"
+          value={activityFilter}
+          onChange={(e) => setActivityFilter(e.target.value)}
+          style={{ width: "auto" }}
         >
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>From:</span>
-          <input
-            type="date"
-            className="toolbar-input"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Issue date from"
-          />
-          <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
-          <input
-            type="date"
-            className="toolbar-input"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Issue date to (leave blank for today)"
-          />
-          {(startDate || endDate) && (
-            <button
-              type="button"
-              onClick={clearDateRange}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary, #888)", padding: "0 2px", fontSize: 16, lineHeight: 1 }}
-              title="Clear date range"
-            >✕</button>
-          )}
-        </div>
+          <option value="">All Members</option>
+          <option value="with_books">With Active Books</option>
+          <option value="with_fines">With Unpaid Fines</option>
+        </select>
+
+        {/* Sort selector defaulting to Recent Activity */}
+        <select
+          className="toolbar-input"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          style={{ width: "auto", fontWeight: 600 }}
+          title="Change sorting order"
+        >
+          <option value="recent_activity">Sort: Recent Book Order / Activity</option>
+          <option value="joined">Sort: Recently Joined</option>
+          <option value="books">Sort: Most Active Books</option>
+          <option value="fines">Sort: Highest Fines</option>
+        </select>
       </div>
 
+      {/* Members Table */}
       {loading ? (
-        <p className="empty">Loading...</p>
-      ) : filteredIssues.length === 0 ? (
-        <p className="empty">No records found.</p>
+        <p className="empty">Loading members...</p>
+      ) : filteredAndSortedMembers.length === 0 ? (
+        <p className="empty">No members matching your filters.</p>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Book</th>
                 <th>Member</th>
-                <th>Issued</th>
-                <th>Due</th>
-                <th>Returned</th>
-                <th>Status</th>
-                <th>Fine</th>
-                <th></th>
+                <th>Membership Tier</th>
+                <th>Issued Books</th>
+                <th>Pending Requests</th>
+                <th>Fines Due</th>
+                <th>Recent Activity</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredIssues.map((i) => (
-                <tr key={i._id}>
-                  <td>
-                    {i.book?.title}
-                    <span className="cell-sub">{i.book?.author}</span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span>{i.member?.name}</span>
-                      {renderTierBadge(i.member?.membership)}
-                    </div>
-                    <span className="cell-sub">{i.member?.email}</span>
-                  </td>
-                  <td>{formatDate(i.issueDate)}</td>
-                  <td>
-                    {formatDate(i.dueDate)}
-                    {i.reissueCount > 0 && (
-                      <span className="cell-sub">Reissued {i.reissueCount}x</span>
-                    )}
-                  </td>
-                  <td>{formatDate(i.returnDate)}</td>
-                  <td>{statusBadge(i)}</td>
-                  <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
-                  <td>
-                    {i.status === "issued" && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {/* Strict Flow: Sirf tabhi dikhega jab member ne reissue request raise ki ho */}
-                        {i.reissueRequested && (
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => setToReissue(i)}
-                            title={`Member requested extension till ${formatDate(i.reissueRequestedDate)}`}
-                          >
-                            Review Reissue
-                          </button>
+              {paginatedMembers.map((m) => {
+                const avatarSrc = m.avatar ? `${SERVER_URL}${m.avatar}` : null;
+
+                return (
+                  <tr key={m._id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {avatarSrc ? (
+                          <img
+                            src={avatarSrc}
+                            alt=""
+                            style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <span className="avatar avatar-sm">{m.name?.[0]?.toUpperCase()}</span>
                         )}
-                        <button className="btn btn-soft btn-sm" onClick={() => setToReturn(i)}>
-                          <ReturnIcon size={16} /> Return
-                        </button>
+                        <div>
+                          <strong>{m.name}</strong>
+                          <span className="cell-sub">{m.email}</span>
+                        </div>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div>{renderTierBadge(m.membership)}</div>
+                        {m.membership?.expiresAt && m.membership.tier !== "free" && (
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>
+                            Exp: {formatDate(m.membership.expiresAt)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`badge ${m.activeBooksCount > 0 ? "badge-primary" : "badge-secondary"}`}
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        {m.activeBooksCount} book(s)
+                      </span>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`badge ${m.pendingRequestsCount > 0 ? "badge-warning" : "badge-secondary"}`}
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        {m.pendingRequestsCount} pending
+                      </span>
+                    </td>
+
+                    <td>
+                      <strong style={{ color: m.totalFines > 0 ? "#dc2626" : "#16a34a" }}>
+                        ₹{m.totalFines}
+                      </strong>
+                    </td>
+
+                    {/* Recent Activity and Joined Date */}
+                    <td>
+                      <div>
+                        <strong>{formatDate(m.lastActivityAt || m.createdAt)}</strong>
+                        <span
+                          className="cell-sub"
+                          style={{ fontSize: "0.72rem", color: "var(--text-secondary, #6b7280)", marginTop: 2 }}
+                        >
+                          Joined: {formatDate(m.createdAt)}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <button
+                        className="btn btn-soft btn-sm"
+                        onClick={() => openActivity(m)}
+                        style={{ whiteSpace: "nowrap" }}
+                      >
+                        View Activity
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {showForm && <IssueFormModal onClose={() => setShowForm(false)} onSaved={handleIssued} />}
-
-      {toReissue && (
-        <ReissueModal
-          issue={toReissue}
-          mode="direct"
-          onClose={() => setToReissue(null)}
-          onSaved={handleReissued}
-        />
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="pagination" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage(1)}
+            disabled={page <= 1}
+            title="First Page"
+          >
+            « First
+          </button>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            ‹ Prev
+          </button>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary, #666)", margin: "0 8px" }}>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Next ›
+          </button>
+          <button
+            className="btn btn-soft btn-sm"
+            onClick={() => setPage(totalPages)}
+            disabled={page >= totalPages}
+            title="Last Page"
+          >
+            Last »
+          </button>
+        </div>
       )}
 
-      {toReturn && (
-        <Modal title="Return book" onClose={() => setToReturn(null)}>
-          <p>
-            Mark <strong>{toReturn.book?.title}</strong> as returned by{" "}
-            <strong>{toReturn.member?.name}</strong> {renderTierBadge(toReturn.member?.membership)}?
-          </p>
-          {toReturn.currentFine > 0 && (
-            <p style={{ marginTop: 10 }}>
-              <span className="badge badge-danger">Late fine: ₹{toReturn.currentFine}</span>
-            </p>
+      {/* Detailed Member Activity Modal with Mutual Accordion */}
+      {selectedMember && (
+        <Modal
+          title={`Member Activity: ${selectedMember.name}`}
+          onClose={() => {
+            setSelectedMember(null);
+            setActivityData(null);
+          }}
+          maxWidth="680px"
+        >
+          {activityLoading ? (
+            <p className="empty">Loading member history...</p>
+          ) : !activityData ? (
+            <p className="empty">No activity data found.</p>
+          ) : (
+            <div>
+              {/* Member overview banner */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 14px",
+                  background: "var(--card-bg, #f9fafb)",
+                  borderRadius: 10,
+                  border: "1px solid var(--border, #e5e7eb)",
+                  marginBottom: 16,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "1rem", fontWeight: 700 }}>{activityData.member?.name}</div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)" }}>
+                    {activityData.member?.email}
+                  </div>
+                </div>
+                <div>{renderTierBadge(activityData.member?.membership)}</div>
+              </div>
+
+              {/* Accordion 1: Current & Past Issues (Default: OPEN) */}
+              <div
+                style={{
+                  border: "1px solid var(--border, #e5e7eb)",
+                  borderRadius: 10,
+                  marginBottom: 12,
+                  overflow: "hidden",
+                  background: "var(--surface, #ffffff)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveAccordion(activeAccordion === "issues" ? "" : "issues")}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    background: activeAccordion === "issues" ? "var(--soft, rgba(92,107,192,0.06))" : "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: "0.95rem", color: "var(--text, #111)" }}>
+                      Current & Past Issues
+                    </strong>
+                    <span className="badge" style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                      {activityData.issues?.length || 0}
+                    </span>
+                  </div>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      transform: activeAccordion === "issues" ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      color: "var(--text-secondary, #666)",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {activeAccordion === "issues" && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
+                    {(!activityData.issues || activityData.issues.length === 0) ? (
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #888)" }}>
+                        No books issued to this member yet.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 230, overflowY: "auto" }}>
+                        {activityData.issues.map((i) => (
+                          <div
+                            key={i._id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "8px 12px",
+                              border: "1px solid var(--border, #e5e7eb)",
+                              borderRadius: 8,
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <div>
+                              <strong>{i.book?.title}</strong>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                                Issued: {formatDate(i.issueDate)} | Due: {formatDate(i.dueDate)}
+                              </div>
+                            </div>
+                            <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
+                              {i.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Accordion 2: Purchase & Borrow Requests (Default: CLOSED) */}
+              <div
+                style={{
+                  border: "1px solid var(--border, #e5e7eb)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "var(--surface, #ffffff)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveAccordion(activeAccordion === "requests" ? "" : "requests")}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    background: activeAccordion === "requests" ? "var(--soft, rgba(92,107,192,0.06))" : "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: "0.95rem", color: "var(--text, #111)" }}>
+                      Purchase & Borrow Requests
+                    </strong>
+                    <span className="badge" style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                      {activityData.requests?.length || 0}
+                    </span>
+                  </div>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      transform: activeAccordion === "requests" ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      color: "var(--text-secondary, #666)",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {activeAccordion === "requests" && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
+                    {(!activityData.requests || activityData.requests.length === 0) ? (
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #888)" }}>
+                        No purchase or borrow requests submitted by this member.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 230, overflowY: "auto" }}>
+                        {activityData.requests.map((r) => (
+                          <div
+                            key={r._id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "8px 12px",
+                              border: "1px solid var(--border, #e5e7eb)",
+                              borderRadius: 8,
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <div>
+                              <strong>{r.title}</strong>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                                Requested: {formatDate(r.createdAt)}
+                              </div>
+                            </div>
+                            <span className={`badge badge-${r.status}`}>
+                              {r.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-          <div className="modal-actions">
-            <button className="btn btn-soft" onClick={() => setToReturn(null)}>
-              Cancel
-            </button>
-            <button className="btn" onClick={confirmReturn} disabled={returning}>
-              {returning ? "Returning..." : "Confirm return"}
-            </button>
-          </div>
         </Modal>
       )}
     </>
