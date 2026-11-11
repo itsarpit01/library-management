@@ -4,9 +4,13 @@ import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 import Modal from "../components/Modal";
-import { SearchIcon, BookIcon, ClockIcon } from "../components/Icons";
+import { SearchIcon } from "../components/Icons";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
 
 const TIER_TABS = [
   { key: "", label: "All Plans" },
@@ -31,10 +35,11 @@ export default function LibrarianUsers() {
   const PAGE_SIZE = 8;
   const [page, setPage] = useState(1);
 
-  // Detailed Activity Modal
+  // Detailed Activity Modal & Accordion State
   const [selectedMember, setSelectedMember] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityData, setActivityData] = useState(null);
+  const [activeAccordion, setActiveAccordion] = useState("issues"); // "issues" | "requests"
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -57,9 +62,10 @@ export default function LibrarianUsers() {
     setPage(1);
   }, [searchQuery, tierFilter, activityFilter, sortBy]);
 
-  // Open detailed member activity modal
+  // Open detailed member activity modal (resets accordion to "issues" by default)
   const openActivity = async (member) => {
     setSelectedMember(member);
+    setActiveAccordion("issues");
     setActivityLoading(true);
     try {
       const res = await api.get(`/users/members/${member._id}/activity`);
@@ -453,7 +459,7 @@ export default function LibrarianUsers() {
         </div>
       )}
 
-      {/* Detailed Member Activity Modal */}
+      {/* Detailed Member Activity Modal with Mutual Accordion */}
       {selectedMember && (
         <Modal
           title={`Member Activity: ${selectedMember.name}`}
@@ -491,79 +497,186 @@ export default function LibrarianUsers() {
                 <div>{renderTierBadge(activityData.member?.membership)}</div>
               </div>
 
-              {/* Currently Borrowed Books */}
-              <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem" }}>
-                Current & Past Issues ({activityData.issues?.length || 0})
-              </h4>
-              {(!activityData.issues || activityData.issues.length === 0) ? (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #888)", marginBottom: 16 }}>
-                  No books issued to this member yet.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18, maxHeight: 180, overflowY: "auto" }}>
-                  {activityData.issues.map((i) => (
-                    <div
-                      key={i._id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "8px 12px",
-                        border: "1px solid var(--border, #e5e7eb)",
-                        borderRadius: 8,
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <div>
-                        <strong>{i.book?.title}</strong>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
-                          Issued: {formatDate(i.issueDate)} | Due: {formatDate(i.dueDate)}
-                        </div>
-                      </div>
-                      <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
-                        {i.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Accordion 1: Current & Past Issues (Default: OPEN) */}
+              <div
+                style={{
+                  border: "1px solid var(--border, #e5e7eb)",
+                  borderRadius: 10,
+                  marginBottom: 12,
+                  overflow: "hidden",
+                  background: "var(--surface, #ffffff)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveAccordion(activeAccordion === "issues" ? "" : "issues")}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    background: activeAccordion === "issues" ? "var(--soft, rgba(92,107,192,0.06))" : "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: "0.95rem", color: "var(--text, #111)" }}>
+                      Current & Past Issues
+                    </strong>
+                    <span className="badge" style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                      {activityData.issues?.length || 0}
+                    </span>
+                  </div>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      transform: activeAccordion === "issues" ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      color: "var(--text-secondary, #666)",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
 
-              {/* Purchase & Borrow Requests */}
-              <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem" }}>
-                Purchase & Borrow Requests ({activityData.requests?.length || 0})
-              </h4>
-              {(!activityData.requests || activityData.requests.length === 0) ? (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #888)", marginBottom: 16 }}>
-                  No purchase or borrow requests submitted by this member.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
-                  {activityData.requests.map((r) => (
-                    <div
-                      key={r._id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "8px 12px",
-                        border: "1px solid var(--border, #e5e7eb)",
-                        borderRadius: 8,
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <div>
-                        <strong>{r.title}</strong>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
-                          Requested: {formatDate(r.createdAt)}
-                        </div>
+                {activeAccordion === "issues" && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
+                    {(!activityData.issues || activityData.issues.length === 0) ? (
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #888)" }}>
+                        No books issued to this member yet.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 230, overflowY: "auto" }}>
+                        {activityData.issues.map((i) => (
+                          <div
+                            key={i._id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "8px 12px",
+                              border: "1px solid var(--border, #e5e7eb)",
+                              borderRadius: 8,
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <div>
+                              <strong>{i.book?.title}</strong>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                                Issued: {formatDate(i.issueDate)} | Due: {formatDate(i.dueDate)}
+                              </div>
+                            </div>
+                            <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
+                              {i.status}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                      <span className={`badge badge-${r.status}`}>
-                        {r.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Accordion 2: Purchase & Borrow Requests (Default: CLOSED) */}
+              <div
+                style={{
+                  border: "1px solid var(--border, #e5e7eb)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "var(--surface, #ffffff)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveAccordion(activeAccordion === "requests" ? "" : "requests")}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    background: activeAccordion === "requests" ? "var(--soft, rgba(92,107,192,0.06))" : "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: "0.95rem", color: "var(--text, #111)" }}>
+                      Purchase & Borrow Requests
+                    </strong>
+                    <span className="badge" style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                      {activityData.requests?.length || 0}
+                    </span>
+                  </div>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      transform: activeAccordion === "requests" ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      color: "var(--text-secondary, #666)",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {activeAccordion === "requests" && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border, #e5e7eb)" }}>
+                    {(!activityData.requests || activityData.requests.length === 0) ? (
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-secondary, #888)" }}>
+                        No purchase or borrow requests submitted by this member.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 230, overflowY: "auto" }}>
+                        {activityData.requests.map((r) => (
+                          <div
+                            key={r._id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "8px 12px",
+                              border: "1px solid var(--border, #e5e7eb)",
+                              borderRadius: 8,
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <div>
+                              <strong>{r.title}</strong>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                                Requested: {formatDate(r.createdAt)}
+                              </div>
+                            </div>
+                            <span className={`badge badge-${r.status}`}>
+                              {r.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </Modal>
