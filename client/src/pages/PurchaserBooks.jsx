@@ -67,7 +67,7 @@ export default function PurchaserBooks() {
       setActiveSlotsCount(pendingReqs + activeIssues);
       setTotalUnpaidFines(fines);
     } catch {
-      // Background check failure silent
+      // Background check silent
     }
   }, []);
 
@@ -140,28 +140,7 @@ export default function PurchaserBooks() {
           <p>{pagination.total} book(s) in the library.</p>
         </div>
 
-        {hasFineDue ? (
-          <button
-            className="btn"
-            style={{
-              background: "linear-gradient(135deg, #ef4444, #dc2626)",
-              color: "#fff",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontWeight: 700,
-            }}
-            onClick={() => setShowFineBlockedModal(true)}
-            title="Late fine pending. Click to view payment details."
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Pay Fine to Request (₹{totalUnpaidFines} Due)
-          </button>
-        ) : isQuotaFull ? (
+        {isQuotaFull && !hasFineDue ? (
           <button
             className="btn"
             style={{
@@ -186,15 +165,15 @@ export default function PurchaserBooks() {
         )}
       </div>
 
-      {/* Banner 1: Unpaid Fine Warning Banner */}
+      {/* Subtle Notice Banner for Unpaid Fine (Soft amber, non-aggressive) */}
       {hasFineDue && (
         <div
           style={{
-            padding: "12px 16px",
+            padding: "10px 16px",
             marginBottom: 16,
             borderRadius: 8,
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            background: "rgba(245, 158, 11, 0.08)",
+            border: "1px solid rgba(245, 158, 11, 0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -205,35 +184,28 @@ export default function PurchaserBooks() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span
               style={{
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 borderRadius: "50%",
-                background: "#dc2626",
+                background: "#f59e0b",
                 display: "inline-block",
               }}
             />
-            <span style={{ fontSize: "0.88rem", color: "#991b1b", fontWeight: 600 }}>
-              Borrowing Paused: You have an outstanding late fine of ₹{totalUnpaidFines}. Please clear your fine under My Issues to request books.
+            <span style={{ fontSize: "0.88rem", color: "var(--text, #333)", fontWeight: 500 }}>
+              You have an outstanding late fine of <strong>₹{totalUnpaidFines}</strong>. New book requests are temporarily paused until settled.
             </span>
           </div>
           <button
-            className="btn btn-sm"
-            style={{
-              background: "#dc2626",
-              color: "#fff",
-              padding: "5px 14px",
-              fontSize: "0.82rem",
-              fontWeight: 700,
-              border: "none",
-            }}
+            className="btn btn-soft btn-sm"
+            style={{ fontWeight: 600 }}
             onClick={() => navigate("/purchaser/my-issues")}
           >
-            Pay Fine in My Issues →
+            Pay in My Issues →
           </button>
         </div>
       )}
 
-      {/* Banner 2: Quota Full Notification Banner */}
+      {/* Quota Full Notification Banner */}
       {!hasFineDue && isQuotaFull && (
         <div
           style={{
@@ -335,23 +307,7 @@ export default function PurchaserBooks() {
                 key={b._id}
                 book={b}
                 actions={
-                  hasFineDue ? (
-                    <button
-                      className="btn btn-sm"
-                      style={{
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                        border: "1px solid #fca5a5",
-                        fontWeight: 600,
-                        fontSize: "0.8rem",
-                        width: "100%",
-                      }}
-                      onClick={() => setShowFineBlockedModal(true)}
-                      title="Clear unpaid fine to borrow this book"
-                    >
-                      Fine Due: Pay ₹{totalUnpaidFines}
-                    </button>
-                  ) : isQuotaFull ? (
+                  isQuotaFull && !hasFineDue ? (
                     <button
                       className="btn btn-sm"
                       style={{
@@ -432,7 +388,7 @@ export default function PurchaserBooks() {
       {/* Fine Blocked Alert Modal */}
       {showFineBlockedModal && (
         <Modal
-          title="Borrowing Paused: Late Fine Pending"
+          title="Late Fine Pending"
           onClose={() => setShowFineBlockedModal(false)}
         >
           <div style={{ textAlign: "center", padding: "8px 0" }}>
@@ -441,8 +397,8 @@ export default function PurchaserBooks() {
                 width: 48,
                 height: 48,
                 borderRadius: "50%",
-                background: "#fee2e2",
-                color: "#dc2626",
+                background: "rgba(245, 158, 11, 0.12)",
+                color: "#d97706",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -457,10 +413,10 @@ export default function PurchaserBooks() {
             </div>
 
             <h3 style={{ margin: "0 0 6px 0", fontSize: "1.2rem" }}>
-              Outstanding Late Fine: ₹{totalUnpaidFines}
+              Outstanding Fine: ₹{totalUnpaidFines}
             </h3>
             <p style={{ margin: "0 0 16px 0", color: "var(--text-secondary, #666)", fontSize: "0.92rem", lineHeight: 1.5 }}>
-              You have an outstanding late fine on overdue or returned books. To keep library access fair for everyone, new requests are paused until your fine is settled.
+              You have an unsettled late fine of ₹{totalUnpaidFines}. Please clear your pending fine in your <strong>My Issues</strong> page to continue borrowing new books.
             </p>
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
@@ -469,17 +425,11 @@ export default function PurchaserBooks() {
                 className="btn btn-soft"
                 onClick={() => setShowFineBlockedModal(false)}
               >
-                Close
+                Cancel
               </button>
               <button
                 type="button"
                 className="btn"
-                style={{
-                  background: "linear-gradient(135deg, #ef4444, #dc2626)",
-                  color: "#fff",
-                  fontWeight: 700,
-                  border: "none",
-                }}
                 onClick={() => {
                   setShowFineBlockedModal(false);
                   navigate("/purchaser/my-issues");
