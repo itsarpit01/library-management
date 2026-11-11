@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -8,6 +9,7 @@ import useDebounce from "../hooks/useDebounce";
 import BookCard from "../components/BookCard";
 import RequestFormModal from "../components/RequestFormModal";
 import MembershipModal from "../components/MembershipModal";
+import Modal from "../components/Modal";
 import { SearchIcon, RequestIcon } from "../components/Icons";
 
 const LIMIT = 8;
@@ -15,6 +17,7 @@ const LIMIT = 8;
 export default function PurchaserBooks() {
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const tier = getEffectiveTier(user);
 
   const [books, setBooks] = useState([]);
@@ -29,7 +32,10 @@ export default function PurchaserBooks() {
 
   // Active slots tracking (Pending/Counter requests + Issued books)
   const [activeSlotsCount, setActiveSlotsCount] = useState(0);
+  const [totalUnpaidFines, setTotalUnpaidFines] = useState(0);
+
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showFineBlockedModal, setShowFineBlockedModal] = useState(false);
 
   // null = closed, {} = dropdown wala form, { bookId } = specific book modal
   const [requestFor, setRequestFor] = useState(null);
@@ -37,7 +43,7 @@ export default function PurchaserBooks() {
   const debouncedSearch = useDebounce(search);
   const requestId = useRef(0);
 
-  // User ka current active quota load karna
+  // User ka current active quota aur unpaid fines load karna
   const loadUserQuota = useCallback(async () => {
     try {
       const [reqRes, issueRes] = await Promise.all([
@@ -53,7 +59,13 @@ export default function PurchaserBooks() {
       const issues = Array.isArray(issueRes.data) ? issueRes.data : [];
       const activeIssues = issues.filter((i) => i.status === "issued").length;
 
+      // Unpaid fines calculation
+      const fines = issues
+        .filter((i) => !i.finePaid && ((i.currentFine || 0) > 0 || (i.fine || 0) > 0))
+        .reduce((sum, i) => sum + (i.currentFine || i.fine || 0), 0);
+
       setActiveSlotsCount(pendingReqs + activeIssues);
+      setTotalUnpaidFines(fines);
     } catch {
       // Background check failure silent
     }
@@ -87,9 +99,6 @@ export default function PurchaserBooks() {
     loadUserQuota();
   }, [loadBooks, loadUserQuota]);
 
-  // Re-check quota whenever:
-  // 1. Another page dispatches "quota-updated" (e.g. request submitted, cancelled)
-  // 2. User switches back to this tab (librarian may have rejected while tab was in bg)
   useEffect(() => {
     const onQuotaUpdated = () => loadUserQuota();
     const onVisibility = () => {
@@ -107,9 +116,21 @@ export default function PurchaserBooks() {
     };
   }, [loadUserQuota]);
 
-
-  // Quota status check
+  // Status checks
+  const hasFineDue = totalUnpaidFines > 0;
   const isQuotaFull = tier.maxBooks !== Infinity && activeSlotsCount >= tier.maxBooks;
+
+  const handleRequestClick = (bookId = null) => {
+    if (hasFineDue) {
+      setShowFineBlockedModal(true);
+      return;
+    }
+    if (isQuotaFull) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setRequestFor(bookId ? { bookId } : {});
+  };
 
   return (
     <>
@@ -118,7 +139,29 @@ export default function PurchaserBooks() {
           <h2>Browse Books</h2>
           <p>{pagination.total} book(s) in the library.</p>
         </div>
-        {isQuotaFull ? (
+
+        {hasFineDue ? (
+          <button
+            className="btn"
+            style={{
+              background: "linear-gradient(135deg, #ef4444, #dc2626)",
+              color: "#fff",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontWeight: 700,
+            }}
+            onClick={() => setShowFineBlockedModal(true)}
+            title="Late fine pending. Click to view payment details."
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            Pay Fine to Request (₹{totalUnpaidFines} Due)
+          </button>
+        ) : isQuotaFull ? (
           <button
             className="btn"
             style={{
@@ -137,14 +180,61 @@ export default function PurchaserBooks() {
             Upgrade Plan ({activeSlotsCount}/{tier.maxBooks} used)
           </button>
         ) : (
-          <button className="btn" onClick={() => setRequestFor({})}>
+          <button className="btn" onClick={() => handleRequestClick()}>
             <RequestIcon size={18} /> Request a book
           </button>
         )}
       </div>
 
-      {/* Quota reached notification banner */}
-      {isQuotaFull && (
+      {/* Banner 1: Unpaid Fine Warning Banner */}
+      {hasFineDue && (
+        <div
+          style={{
+            padding: "12px 16px",
+            marginBottom: 16,
+            borderRadius: 8,
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: "#dc2626",
+                display: "inline-block",
+              }}
+            />
+            <span style={{ fontSize: "0.88rem", color: "#991b1b", fontWeight: 600 }}>
+              Borrowing Paused: You have an outstanding late fine of ₹{totalUnpaidFines}. Please clear your fine under My Issues to request books.
+            </span>
+          </div>
+          <button
+            className="btn btn-sm"
+            style={{
+              background: "#dc2626",
+              color: "#fff",
+              padding: "5px 14px",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              border: "none",
+            }}
+            onClick={() => navigate("/purchaser/my-issues")}
+          >
+            Pay Fine in My Issues →
+          </button>
+        </div>
+      )}
+
+      {/* Banner 2: Quota Full Notification Banner */}
+      {!hasFineDue && isQuotaFull && (
         <div
           style={{
             padding: "10px 16px",
@@ -245,7 +335,23 @@ export default function PurchaserBooks() {
                 key={b._id}
                 book={b}
                 actions={
-                  isQuotaFull ? (
+                  hasFineDue ? (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                        border: "1px solid #fca5a5",
+                        fontWeight: 600,
+                        fontSize: "0.8rem",
+                        width: "100%",
+                      }}
+                      onClick={() => setShowFineBlockedModal(true)}
+                      title="Clear unpaid fine to borrow this book"
+                    >
+                      Fine Due: Pay ₹{totalUnpaidFines}
+                    </button>
+                  ) : isQuotaFull ? (
                     <button
                       className="btn btn-sm"
                       style={{
@@ -271,7 +377,7 @@ export default function PurchaserBooks() {
                   ) : (
                     <button
                       className="btn btn-soft btn-sm"
-                      onClick={() => setRequestFor({ bookId: b._id })}
+                      onClick={() => handleRequestClick(b._id)}
                       disabled={!isAvailable}
                       title={!isAvailable ? "This book is currently out of stock" : "Request this book"}
                       style={{ width: "100%" }}
@@ -312,14 +418,78 @@ export default function PurchaserBooks() {
           onClose={() => setRequestFor(null)}
           onSaved={() => {
             setRequestFor(null);
-            loadUserQuota(); // Request save hote hi quota refresh
+            loadUserQuota();
             toast.info("Track it under My Requests");
           }}
         />
       )}
 
+      {/* Upgrade Plan Modal */}
       {showUpgradeModal && (
         <MembershipModal onClose={() => setShowUpgradeModal(false)} />
+      )}
+
+      {/* Fine Blocked Alert Modal */}
+      {showFineBlockedModal && (
+        <Modal
+          title="Borrowing Paused: Late Fine Pending"
+          onClose={() => setShowFineBlockedModal(false)}
+        >
+          <div style={{ textAlign: "center", padding: "8px 0" }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "#fee2e2",
+                color: "#dc2626",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+
+            <h3 style={{ margin: "0 0 6px 0", fontSize: "1.2rem" }}>
+              Outstanding Late Fine: ₹{totalUnpaidFines}
+            </h3>
+            <p style={{ margin: "0 0 16px 0", color: "var(--text-secondary, #666)", fontSize: "0.92rem", lineHeight: 1.5 }}>
+              You have an outstanding late fine on overdue or returned books. To keep library access fair for everyone, new requests are paused until your fine is settled.
+            </p>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setShowFineBlockedModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{
+                  background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  border: "none",
+                }}
+                onClick={() => {
+                  setShowFineBlockedModal(false);
+                  navigate("/purchaser/my-issues");
+                }}
+              >
+                Go to My Issues & Pay Fine →
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </>
   );

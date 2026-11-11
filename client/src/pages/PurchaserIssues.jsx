@@ -19,6 +19,9 @@ export default function PurchaserIssues() {
   const [returning, setReturning] = useState(false);
   const [payingFineId, setPayingFineId] = useState(null);
 
+  // Post-return Fine Prompt Modal State
+  const [finePrompt, setFinePrompt] = useState(null); // { issueId, bookTitle, fine, issue }
+
   // Search, Status, and Date Range Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -158,17 +161,28 @@ export default function PurchaserIssues() {
   // Return Book Handler
   const confirmReturn = async () => {
     if (!toReturn) return;
+    const targetBookTitle = toReturn.book?.title;
+    const targetIssueId = toReturn._id;
     setReturning(true);
+
     try {
-      const res = await api.patch(`/issues/${toReturn._id}/return`);
+      const res = await api.patch(`/issues/${targetIssueId}/return`);
       const fine = res.data?.fine ?? res.data?.currentFine ?? 0;
-      toast.success(
-        fine > 0
-          ? `Book returned successfully. Late fine: ₹${fine}`
-          : "Book returned successfully"
-      );
       setToReturn(null);
-      load();
+      await load();
+      window.dispatchEvent(new Event("quota-updated"));
+
+      if (fine > 0) {
+        // Step 1: Open clean post-return modal with [Pay Fine Now] or [Pay Later]
+        setFinePrompt({
+          issueId: targetIssueId,
+          bookTitle: targetBookTitle,
+          fine,
+          issue: { ...toReturn, currentFine: fine, fine },
+        });
+      } else {
+        toast.success("Book returned successfully");
+      }
     } catch (err) {
       toast.error(getErrorMessage(err, "Failed to return book"));
       setToReturn(null);
@@ -217,7 +231,11 @@ export default function PurchaserIssues() {
       return (
         <span
           className="badge"
-          style={{ backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffb74d" }}
+          style={{
+            backgroundColor: "#fff3e0",
+            color: "#e65100",
+            border: "1px solid #ffb74d",
+          }}
         >
           Reissue Requested
         </span>
@@ -231,7 +249,7 @@ export default function PurchaserIssues() {
       <div className="page-head">
         <div>
           <h2>My Issued Books</h2>
-          <p>Books issued to you, return dates, and reissue requests.</p>
+          <p>Books currently issued to you and your past borrowing history.</p>
         </div>
       </div>
 
@@ -248,10 +266,10 @@ export default function PurchaserIssues() {
           marginBottom: 16,
         }}
       >
-        <div className="search-box" style={{ maxWidth: 240, minWidth: 170, flex: "0 1 240px" }}>
+        <div className="search-box" style={{ maxWidth: 240, minWidth: 160, flex: "0 1 240px" }}>
           <SearchIcon size={16} />
           <input
-            placeholder="Search title, author..."
+            placeholder="Search book or author..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -261,10 +279,10 @@ export default function PurchaserIssues() {
           className="toolbar-input"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ width: 140, flexShrink: 0 }}
+          style={{ width: "auto", minWidth: 130, flexShrink: 0 }}
         >
           <option value="">All Statuses</option>
-          <option value="issued">Issued</option>
+          <option value="issued">Currently Issued</option>
           <option value="overdue">Overdue</option>
           <option value="returned">Returned</option>
         </select>
@@ -290,7 +308,7 @@ export default function PurchaserIssues() {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Issue start date"
+            title="Issue date from"
           />
           <span style={{ fontSize: "0.8rem", color: "var(--text-secondary, #666)", fontWeight: 600 }}>To:</span>
           <input
@@ -298,36 +316,33 @@ export default function PurchaserIssues() {
             className="toolbar-input"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            placeholder="Today"
             style={{ width: 125, padding: "4px 6px", fontSize: "0.8rem" }}
-            title="Issue end date"
+            title="Issue date to (leave blank for today)"
           />
           {(startDate || endDate) && (
             <button
-              className="btn btn-soft btn-sm"
+              type="button"
               onClick={clearDateRange}
-              style={{ padding: "3px 8px", fontSize: "0.75rem", marginLeft: 2 }}
-              title="Reset date range"
-            >
-              Clear
-            </button>
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary, #888)", padding: "0 2px", fontSize: 16, lineHeight: 1 }}
+              title="Clear date range"
+            >✕</button>
           )}
         </div>
       </div>
 
       {loading ? (
-        <p className="empty">Loading issues...</p>
+        <p className="empty">Loading your issues...</p>
       ) : filteredIssues.length === 0 ? (
-        <p className="empty">No issue records matching your filters.</p>
+        <p className="empty">No matching issued books found.</p>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Book</th>
-                <th style={{ whiteSpace: "nowrap" }}>Issued Date</th>
-                <th style={{ whiteSpace: "nowrap" }}>Due Date</th>
-                <th style={{ whiteSpace: "nowrap" }}>Returned Date</th>
+                <th>Issued Date</th>
+                <th>Due Date</th>
+                <th>Returned Date</th>
                 <th>Status</th>
                 <th>Fine</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -338,24 +353,15 @@ export default function PurchaserIssues() {
                 <tr key={i._id}>
                   <td>
                     <strong>{i.book?.title}</strong>
-                    <span className="cell-sub" style={{ display: "inline-block", marginLeft: 6 }}>
-                      by {i.book?.author}
-                    </span>
+                    <span className="cell-sub">by {i.book?.author}</span>
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(i.issueDate)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <div>
+                    <span style={{ color: i.isOverdue ? "var(--danger, #e53935)" : "inherit" }}>
                       {formatDate(i.dueDate)}
-                      {i.reissueCount > 0 && (
-                        <span className="badge" style={{ fontSize: "0.72rem", marginLeft: 6 }}>
-                          {i.reissueCount}x
-                        </span>
-                      )}
-                    </div>
-                    {i.reissueRequested && i.reissueRequestedDate && (
-                      <div style={{ fontSize: "0.75rem", color: "#c2410c", fontWeight: 600, marginTop: 2 }}>
-                        Req: {formatDate(i.reissueRequestedDate)}
-                      </div>
+                    </span>
+                    {i.reissueCount > 0 && (
+                      <span className="cell-sub">{i.reissueCount}x</span>
                     )}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>{formatDate(i.returnDate)}</td>
@@ -428,7 +434,7 @@ export default function PurchaserIssues() {
                                 ? "Overdue books cannot be reissued. Please return."
                                 : (i.reissueCount || 0) >= 2
                                 ? "Max reissues reached"
-                                : "Request a reissue"
+                                : "Request a due date extension"
                             }
                           >
                             Reissue
@@ -439,7 +445,6 @@ export default function PurchaserIssues() {
                           className="btn btn-soft btn-sm"
                           onClick={() => setToReturn(i)}
                           style={{ whiteSpace: "nowrap" }}
-                          title="Return this book"
                         >
                           <ReturnIcon size={16} /> Return
                         </button>
@@ -453,7 +458,6 @@ export default function PurchaserIssues() {
         </div>
       )}
 
-      {/* Reissue Request Modal */}
       {toReissue && (
         <ReissueModal
           issue={toReissue}
@@ -474,7 +478,7 @@ export default function PurchaserIssues() {
           </p>
           {toReturn.currentFine > 0 && (
             <p style={{ marginTop: 10 }}>
-              <span className="badge badge-danger">Late fine: ₹{toReturn.currentFine}</span>
+              <span className="badge badge-danger">Late fine accrued: ₹{toReturn.currentFine}</span>
             </p>
           )}
           <div className="modal-actions">
@@ -484,6 +488,84 @@ export default function PurchaserIssues() {
             <button className="btn" onClick={confirmReturn} disabled={returning}>
               {returning ? "Returning..." : "Confirm return"}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Post-Return Late Fine Settlement Modal */}
+      {finePrompt && (
+        <Modal
+          title="Book Returned Successfully"
+          onClose={() => setFinePrompt(null)}
+        >
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "#fee2e2",
+                color: "#dc2626",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+
+            <h3 style={{ margin: "0 0 6px 0", fontSize: "1.2rem" }}>Late Fine Accrued</h3>
+            <p style={{ margin: "0 0 16px 0", color: "var(--text-secondary, #666)", fontSize: "0.92rem" }}>
+              <strong>{finePrompt.bookTitle}</strong> has been returned. A late fine of{" "}
+              <strong style={{ color: "#dc2626", fontSize: "1.05rem" }}>₹{finePrompt.fine}</strong> is due.
+            </p>
+
+            <div
+              style={{
+                background: "rgba(220, 38, 38, 0.05)",
+                border: "1px solid rgba(220, 38, 38, 0.15)",
+                borderRadius: 8,
+                padding: "10px 14px",
+                fontSize: "0.82rem",
+                color: "#991b1b",
+                marginBottom: 20,
+                textAlign: "left",
+              }}
+            >
+              Note: Unpaid fines pause new book requests. You can pay now online or clear it anytime from your My Issues table.
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setFinePrompt(null)}
+              >
+                Pay Later
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{
+                  background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 700,
+                }}
+                onClick={() => {
+                  const issueObj = finePrompt.issue;
+                  setFinePrompt(null);
+                  handlePayFine(issueObj);
+                }}
+              >
+                Pay Fine Now (₹{finePrompt.fine})
+              </button>
+            </div>
           </div>
         </Modal>
       )}

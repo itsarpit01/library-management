@@ -6,6 +6,7 @@ import Notification from "../models/Notification.js";
 import { assertDueWithinTier } from "../services/issueService.js";
 import { getUserTierConfig } from "../config/membershipConfig.js";
 import { endOfToday } from "../utils/dates.js";
+import { calcFine } from "../utils/fine.js";
 import { httpError } from "../services/issueService.js";
 import mongoose from "mongoose";
 import { sendNotification, notifyLibrarians } from "./notificationController.js";
@@ -62,6 +63,27 @@ export const createRequest = async (req, res) => {
   ]);
 
   if (!book) return res.status(404).json({ message: "Book not found" });
+
+  // GATE 0: Outstanding unpaid fines check
+  const userIssues = await Issue.find({
+    member: req.user.id,
+    finePaid: false,
+  });
+
+  const totalUnpaidFine = userIssues.reduce((sum, i) => {
+    if (i.finePaid) return sum;
+    if (i.status === "returned") return sum + (i.fine || 0);
+    if (i.status === "issued" && new Date() > i.dueDate) {
+      return sum + calcFine(i.dueDate);
+    }
+    return sum;
+  }, 0);
+
+  if (totalUnpaidFine > 0) {
+    return res.status(400).json({
+      message: `Borrowing paused: You have an outstanding late fine of ₹${totalUnpaidFine}. Please clear your fine under My Issues before requesting new books.`,
+    });
+  }
 
   const tierConfig = getUserTierConfig(user);
 
