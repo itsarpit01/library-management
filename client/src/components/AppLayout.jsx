@@ -249,13 +249,13 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar-right">
-            {/* Theme Toggle (Kept) */}
+            {/* Theme Switcher */}
             <ThemeToggle />
 
-            {/* Notification Bell (Kept) */}
+            {/* Notification Bell */}
             <NotificationBell />
 
-            {/* Clean Profile Dropdown Container */}
+            {/* Clean Profile Dropdown Trigger (Arrow Removed) */}
             <div ref={menuRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -272,7 +272,6 @@ export default function AppLayout() {
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                 }}
-                title="Account menu"
               >
                 {avatarSrc && !avatarBroken ? (
                   <img
@@ -294,25 +293,6 @@ export default function AppLayout() {
                     {user?.role}
                   </span>
                 </div>
-
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{
-                    color: "var(--text-secondary, #666)",
-                    transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s ease",
-                    marginLeft: 2,
-                  }}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
               </button>
 
               {/* Modern Dropdown Menu */}
@@ -331,7 +311,7 @@ export default function AppLayout() {
                     zIndex: 50,
                   }}
                 >
-                  {/* Dropdown Header: Name & Plan */}
+                  {/* Header: Name, Email & Role/Plan Badge */}
                   <div style={{ padding: "8px 12px 10px 12px", borderBottom: "1px solid var(--border, #f1f5f9)" }}>
                     <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text, #111)" }}>
                       {user?.name}
@@ -339,31 +319,35 @@ export default function AppLayout() {
                     <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {user?.email}
                     </div>
-                    {user?.role === "purchaser" && (
-                      <div style={{ marginTop: 8 }}>
-                        <span
-                          style={{
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            padding: "3px 8px",
-                            borderRadius: 12,
-                            display: "inline-block",
-                            background:
-                              tier.tier === "ultimate"
+                    <div style={{ marginTop: 8 }}>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: 12,
+                          display: "inline-block",
+                          background:
+                            user?.role === "purchaser"
+                              ? tier.tier === "ultimate"
                                 ? "linear-gradient(135deg, #f59e0b, #d97706)"
                                 : tier.tier === "premium"
                                 ? "linear-gradient(135deg, #6366f1, #4338ca)"
-                                : "rgba(92, 107, 192, 0.1)",
-                            color: tier.tier === "free" ? "var(--primary, #5c6bc0)" : "#ffffff",
-                          }}
-                        >
-                          {tier.name} Plan
-                        </span>
-                      </div>
-                    )}
+                                : "rgba(92, 107, 192, 0.1)"
+                              : "rgba(92, 107, 192, 0.1)",
+                          color:
+                            user?.role === "purchaser" && tier.tier !== "free"
+                              ? "#ffffff"
+                              : "var(--primary, #5c6bc0)",
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        {user?.role === "purchaser" ? `${tier.name} Plan` : `${user?.role} Staff`}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Dropdown Items */}
+                  {/* Menu Items */}
                   <div style={{ padding: "4px 0" }}>
                     {/* 1. Profile */}
                     <button
@@ -391,11 +375,13 @@ export default function AppLayout() {
                       <UserIcon size={16} />
                       <div>
                         <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Profile</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>Plan & details</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>
+                          {user?.role === "purchaser" ? "Plan & details" : "Account details"}
+                        </div>
                       </div>
                     </button>
 
-                    {/* 2. Transaction History (Purchaser only) */}
+                    {/* 2. Transaction History (Purchaser Only) */}
                     {user?.role === "purchaser" && (
                       <button
                         type="button"
