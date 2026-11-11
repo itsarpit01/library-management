@@ -10,7 +10,11 @@ import MembershipModal from "../components/MembershipModal";
 import { statusBadge } from "./PurchaserRequests";
 import { BookIcon, RequestIcon, IssueIcon } from "../components/Icons";
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
 
 export default function PurchaserHome() {
   const { user } = useAuth();
@@ -184,7 +188,11 @@ export default function PurchaserHome() {
             }}
           >
             {latestBooks.map((b) => {
-              const coverSrc = b.coverImage ? `${SERVER_URL}${b.coverImage}` : null;
+              const coverSrc = b.coverImage
+                ? b.coverImage.startsWith("http")
+                  ? b.coverImage
+                  : `${SERVER_URL}${b.coverImage.startsWith("/") ? "" : "/"}${b.coverImage}`
+                : null;
               const isAvailable = b.availableCopies > 0;
               return (
                 <div

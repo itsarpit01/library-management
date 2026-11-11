@@ -7,7 +7,12 @@ import { useToast } from "../context/ToastContext";
 import { bookFormSchema } from "../schemas/bookSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
+
 const empty = { title: "", author: "", isbn: "", category: "", price: "", totalCopies: 1 };
 
 export default function BookFormModal({ book, onClose, onSaved }) {
@@ -126,7 +131,9 @@ export default function BookFormModal({ book, onClose, onSaved }) {
                 coverFile
                   ? URL.createObjectURL(coverFile)
                   : isEdit && book.coverImage
-                  ? `${SERVER_URL}${book.coverImage}`
+                  ? book.coverImage.startsWith("http")
+                    ? book.coverImage
+                    : `${SERVER_URL}${book.coverImage.startsWith("/") ? "" : "/"}${book.coverImage}`
                   : null
               }
               onFile={handleFilePicked}
