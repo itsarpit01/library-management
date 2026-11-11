@@ -135,30 +135,26 @@ export default function AppLayout() {
       : "Active";
 
   return (
-    <div className="layout">
-      {open && (
-        <div
-          className="drawer-overlay"
-          onClick={() => setOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+    <div className="app">
+      <div
+        className={`overlay ${open ? "show" : ""}`}
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+      />
 
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="sidebar-brand">
-          <Link
-            to={user?.role === "librarian" ? "/librarian" : "/purchaser"}
-            className="brand-link"
-            onClick={() => setOpen(false)}
-          >
-            <span className="brand-logo">
-              <BookIcon />
-            </span>
-            <span className="brand-text">LibraryHub</span>
-          </Link>
-        </div>
+        <Link
+          to={user?.role === "librarian" ? "/librarian" : "/purchaser"}
+          className="logo"
+          onClick={() => setOpen(false)}
+        >
+          <span className="logo-mark">
+            <BookIcon />
+          </span>
+          <span>LibraryHub</span>
+        </Link>
 
-        <nav className="sidebar-nav">
+        <nav className="nav">
           {links.map((link) => {
             const Icon = link.icon;
             return (
@@ -166,9 +162,7 @@ export default function AppLayout() {
                 key={link.to}
                 to={link.to}
                 end={link.end}
-                className={({ isActive }) =>
-                  `nav-link ${isActive ? "active" : ""}`
-                }
+                className={({ isActive }) => (isActive ? "active" : "")}
                 onClick={() => setOpen(false)}
               >
                 <Icon />
@@ -184,9 +178,9 @@ export default function AppLayout() {
               if (tier.tier !== "ultimate") setShowMembershipModal(true);
             }}
             style={{
-              margin: "12px 14px",
+              marginTop: "auto",
               padding: "10px 12px",
-              background: "var(--soft-1, rgba(92,107,192,0.06))",
+              background: "var(--soft-2, rgba(92,107,192,0.06))",
               border: "1px solid var(--border, rgba(0,0,0,0.08))",
               borderRadius: 10,
               cursor: tier.tier !== "ultimate" ? "pointer" : "default",
@@ -207,7 +201,7 @@ export default function AppLayout() {
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
-                  color: "var(--text-secondary, #666)",
+                  color: "var(--muted, #666)",
                 }}
               >
                 {tier.name} Capacity
@@ -237,7 +231,7 @@ export default function AppLayout() {
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--muted, #666)" }}>
               <span>
                 {tier.tier === "ultimate"
                   ? "Unlimited capacity"
@@ -302,7 +296,7 @@ export default function AppLayout() {
 
                 <div className="user-meta" style={{ textAlign: "left" }}>
                   <strong style={{ fontSize: "0.88rem", lineHeight: 1.2 }}>{user?.name}</strong>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--muted, #666)" }}>
                     {user?.role}
                   </span>
                 </div>
@@ -327,7 +321,7 @@ export default function AppLayout() {
                     <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text, #111)" }}>
                       {user?.name}
                     </div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: "0.78rem", color: "var(--muted, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {user?.email}
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -361,7 +355,6 @@ export default function AppLayout() {
                   <div style={{ padding: "4px 0" }}>
                     <button
                       type="button"
-                      className="nav-link"
                       onClick={() => {
                         setDropdownOpen(false);
                         navigate(`/${user?.role}/profile?tab=profile`);
@@ -384,7 +377,7 @@ export default function AppLayout() {
                       <UserIcon size={16} />
                       <div>
                         <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Profile</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>
+                        <div style={{ fontSize: "0.72rem", color: "var(--muted, #666)" }}>
                           {user?.role === "purchaser" ? "Plan & details" : "Account details"}
                         </div>
                       </div>
@@ -393,7 +386,6 @@ export default function AppLayout() {
                     {user?.role === "purchaser" && (
                       <button
                         type="button"
-                        className="nav-link"
                         onClick={() => {
                           setDropdownOpen(false);
                           navigate(`/${user?.role}/profile?tab=transactions`);
@@ -419,14 +411,13 @@ export default function AppLayout() {
                         </svg>
                         <div>
                           <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Transaction History</div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>All payments & fines</div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--muted, #666)" }}>All payments & fines</div>
                         </div>
                       </button>
                     )}
 
                     <button
                       type="button"
-                      className="nav-link"
                       onClick={() => {
                         setDropdownOpen(false);
                         navigate(`/${user?.role}/profile?tab=settings`);
@@ -452,7 +443,7 @@ export default function AppLayout() {
                       </svg>
                       <div>
                         <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Settings</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>Password & security</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--muted, #666)" }}>Password & security</div>
                       </div>
                     </button>
                   </div>
