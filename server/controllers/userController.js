@@ -329,7 +329,15 @@ export const requestAccountDeletion = async (req, res) => {
     user.accountDeleteExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await user.save();
 
-    await sendAccountDeletionEmail(user.email, user.name, user._id, rawToken);
+    // Send email with immediate failure handling to prevent UI freezing
+    try {
+      await sendAccountDeletionEmail(user.email, user.name, user._id, rawToken);
+    } catch (mailError) {
+      console.error("Email send failed:", mailError);
+      return res.status(500).json({
+        message: `Email sending failed: ${mailError.message}. Please verify your SMTP settings.`,
+      });
+    }
 
     res.json({
       message: "A verification link has been sent to your registered email address. Please check your inbox within 15 minutes to confirm deletion.",

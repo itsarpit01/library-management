@@ -7,13 +7,26 @@ const getTransporter = () => {
 
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    const port = Number(SMTP_PORT) || 465;
+  if (SMTP_USER && SMTP_PASS) {
+    // Strip any accidental spaces from Google 16-character app password
+    const cleanPass = SMTP_PASS.replace(/\s+/g, "");
+    const isGmail = !SMTP_HOST || SMTP_HOST.includes("gmail");
+
     transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port,
-      secure: port === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
+      ...(isGmail
+        ? { service: "gmail" }
+        : {
+            host: SMTP_HOST,
+            port: Number(SMTP_PORT) || 465,
+            secure: Number(SMTP_PORT) === 465,
+          }),
+      auth: {
+        user: SMTP_USER,
+        pass: cleanPass,
+      },
+      connectionTimeout: 8000, // 8-second timeout prevents indefinite hanging
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   } else {
     transporter = null;
