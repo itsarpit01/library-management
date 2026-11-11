@@ -29,7 +29,7 @@ export default function LibrarianUsers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("");
   const [activityFilter, setActivityFilter] = useState("");
-  const [sortBy, setSortBy] = useState("recent_activity"); // Default: Recent activity/order first
+  const [sortBy, setSortBy] = useState("recent_activity");
 
   // Pagination (8 members per page)
   const PAGE_SIZE = 8;
@@ -39,7 +39,7 @@ export default function LibrarianUsers() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityData, setActivityData] = useState(null);
-  const [activeAccordion, setActiveAccordion] = useState("issues"); // "issues" | "requests"
+  const [activeAccordion, setActiveAccordion] = useState("issues");
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -53,8 +53,11 @@ export default function LibrarianUsers() {
     }
   }, [toast]);
 
+  // Real-time Auto-Sync every 8 seconds without hard refresh
   useEffect(() => {
     loadMembers();
+    const interval = setInterval(loadMembers, 8000);
+    return () => clearInterval(interval);
   }, [loadMembers]);
 
   // Reset pagination on filter or sort change
@@ -62,7 +65,6 @@ export default function LibrarianUsers() {
     setPage(1);
   }, [searchQuery, tierFilter, activityFilter, sortBy]);
 
-  // Open detailed member activity modal (resets accordion to "issues" by default)
   const openActivity = async (member) => {
     setSelectedMember(member);
     setActiveAccordion("issues");
@@ -77,7 +79,6 @@ export default function LibrarianUsers() {
     }
   };
 
-  // Filtered and Sorted list calculation
   const filteredAndSortedMembers = useMemo(() => {
     const filtered = members.filter((m) => {
       if (searchQuery.trim()) {
@@ -101,7 +102,6 @@ export default function LibrarianUsers() {
       return true;
     });
 
-    // Sort order logic
     const sorted = [...filtered];
     if (sortBy === "recent_activity") {
       sorted.sort(
@@ -120,14 +120,12 @@ export default function LibrarianUsers() {
     return sorted;
   }, [members, searchQuery, tierFilter, activityFilter, sortBy]);
 
-  // Paginated slice
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedMembers.length / PAGE_SIZE));
   const paginatedMembers = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredAndSortedMembers.slice(start, start + PAGE_SIZE);
   }, [filteredAndSortedMembers, page]);
 
-  // Quick Stats
   const totalCount = members.length;
   const paidCount = members.filter((m) => ["premium", "ultimate"].includes(m.membership?.tier)).length;
   const borrowingCount = members.filter((m) => m.activeBooksCount > 0).length;
@@ -297,7 +295,6 @@ export default function LibrarianUsers() {
           <option value="with_fines">With Unpaid Fines</option>
         </select>
 
-        {/* Sort selector defaulting to Recent Activity */}
         <select
           className="toolbar-input"
           value={sortBy}
@@ -390,7 +387,6 @@ export default function LibrarianUsers() {
                       </strong>
                     </td>
 
-                    {/* Recent Activity and Joined Date */}
                     <td>
                       <div>
                         <strong>{formatDate(m.lastActivityAt || m.createdAt)}</strong>
@@ -459,7 +455,7 @@ export default function LibrarianUsers() {
         </div>
       )}
 
-      {/* Detailed Member Activity Modal with Mutual Accordion */}
+      {/* Detailed Member Activity Modal with Accordion & Fine Badges */}
       {selectedMember && (
         <Modal
           title={`Member Activity: ${selectedMember.name}`}
@@ -475,7 +471,6 @@ export default function LibrarianUsers() {
             <p className="empty">No activity data found.</p>
           ) : (
             <div>
-              {/* Member overview banner */}
               <div
                 style={{
                   display: "flex",
@@ -577,9 +572,20 @@ export default function LibrarianUsers() {
                                 Issued: {formatDate(i.issueDate)} | Due: {formatDate(i.dueDate)}
                               </div>
                             </div>
-                            <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
-                              {i.status}
-                            </span>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              {i.finePaid ? (
+                                <span className="badge badge-success" style={{ fontSize: "0.72rem" }}>
+                                  Fine Paid (₹{i.rawFine || i.fine})
+                                </span>
+                              ) : (i.currentFine || i.fine) > 0 ? (
+                                <span className="badge badge-danger" style={{ fontSize: "0.72rem" }}>
+                                  Fine Due: ₹{i.currentFine || i.fine}
+                                </span>
+                              ) : null}
+                              <span className={`badge ${i.status === "issued" ? "badge-warning" : "badge-success"}`}>
+                                {i.status}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>

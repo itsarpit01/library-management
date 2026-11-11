@@ -6,6 +6,7 @@ import Issue from "../models/Issue.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
 import Transaction from "../models/Transaction.js";
 import { MEMBERSHIP_TIERS } from "../config/membershipConfig.js";
+import { withOverdueInfo } from "../utils/fine.js";
 
 const getEffectiveMembership = (user) => {
   const mem = user.membership || { tier: "free", expiresAt: null };
@@ -29,7 +30,7 @@ const removeOldAvatar = (avatarPath) => {
   fs.unlink(path.join(process.cwd(), avatarPath), () => {});
 };
 
-// GET /api/users/members (librarian: all members sorted by most recent book purchase/issue/order)
+// GET /api/users/members (librarian: all members sorted by most recent interaction)
 export const getMembers = async (req, res) => {
   try {
     const users = await User.find({ role: "purchaser" })
@@ -38,7 +39,7 @@ export const getMembers = async (req, res) => {
 
     const userIds = users.map((u) => u._id);
 
-    // Aggregate active issues, total fines, and latest book order/issue/payment activity per user
+    // Aggregate active issues, UNPAID fines only, and latest interaction dates
     const [issueStats, requestStats, txStats] = await Promise.all([
       Issue.aggregate([
         { $match: { member: { $in: userIds } } },
@@ -48,7 +49,16 @@ export const getMembers = async (req, res) => {
             activeIssuesCount: {
               $sum: { $cond: [{ $eq: ["$status", "issued"] }, 1, 0] },
             },
-            totalFines: { $sum: "$fine" },
+            // Sirf unpaid fines ko count karega, paid fines exclude honge
+            totalFines: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ["$finePaid", false] }, { $gt: ["$fine", 0] }] },
+                  "$fine",
+                  0,
+                ],
+              },
+            },
             overdueCount: {
               $sum: { $cond: [{ $eq: ["$status", "overdue"] }, 1, 0] },
             },
@@ -94,7 +104,6 @@ export const getMembers = async (req, res) => {
       const reqStats = reqMap.get(String(u._id)) || {};
       const txStat = txMap.get(String(u._id)) || {};
 
-      // Determine the member's most recent interaction (order, issue, subscription, or join)
       const candidateDates = [
         u.createdAt,
         u.membership?.startedAt,
@@ -123,7 +132,6 @@ export const getMembers = async (req, res) => {
       };
     });
 
-    // Default Sort: Jisne recently book issue/order/use kiya hai wo sabse top par
     result.sort(
       (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
     );
@@ -134,17 +142,20 @@ export const getMembers = async (req, res) => {
   }
 };
 
-// GET /api/users/members/:id/activity (librarian: inspect single member history & current issues)
+// GET /api/users/members/:id/activity (librarian: inspect single member history)
 export const getMemberActivity = async (req, res) => {
   try {
     const { id } = req.params;
     const member = await User.findById(id).select("-password").lean();
     if (!member) return res.status(404).json({ message: "Member not found" });
 
-    const [issues, requests] = await Promise.all([
+    const [rawIssues, requests] = await Promise.all([
       Issue.find({ member: id }).populate("book").sort({ createdAt: -1 }).lean(),
       PurchaseRequest.find({ requestedBy: id }).sort({ createdAt: -1 }).lean(),
     ]);
+
+    // Issues ko withOverdueInfo ke sath populate karein taaki finePaid status pass ho
+    const issues = rawIssues.map(withOverdueInfo);
 
     res.json({
       member: {

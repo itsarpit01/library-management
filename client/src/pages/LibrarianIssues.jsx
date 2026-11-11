@@ -75,11 +75,14 @@ export default function LibrarianIssues() {
     }
   }, [tab, toast]);
 
+  // Real-time Auto-Sync every 8 seconds without hard refresh
   useEffect(() => {
     loadIssues();
+    const interval = setInterval(loadIssues, 8000);
+    return () => clearInterval(interval);
   }, [loadIssues]);
 
-  // Auto-refresh when librarian switches back to this tab
+  // Tab switch par immediate refresh
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "visible") loadIssues();
@@ -118,7 +121,6 @@ export default function LibrarianIssues() {
     }
   };
 
-  // Helper to render member tier badge (Clean SVGs, No Emojis)
   const renderTierBadge = (membership) => {
     const tier = membership?.tier || "free";
     if (tier === "ultimate") {
@@ -336,11 +338,27 @@ export default function LibrarianIssues() {
                   </td>
                   <td>{formatDate(i.returnDate)}</td>
                   <td>{statusBadge(i)}</td>
-                  <td>{i.currentFine > 0 ? `₹${i.currentFine}` : "-"}</td>
+
+                  {/* Fine Column showing Paid status or dynamic unpaid amount */}
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {i.finePaid ? (
+                      <span
+                        className="badge badge-success"
+                        style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                        title={`Fine settled on ${formatDate(i.finePaidAt)}`}
+                      >
+                        Paid (₹{i.rawFine || i.fine})
+                      </span>
+                    ) : i.currentFine > 0 ? (
+                      <span style={{ color: "#dc2626", fontWeight: 700 }}>₹{i.currentFine}</span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+
                   <td>
                     {i.status === "issued" && (
                       <div style={{ display: "flex", gap: 6 }}>
-                        {/* Strict Flow: Sirf tabhi dikhega jab member ne reissue request raise ki ho */}
                         {i.reissueRequested && (
                           <button
                             className="btn btn-sm"
