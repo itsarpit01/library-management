@@ -6,6 +6,7 @@ import { useToast } from "../context/ToastContext";
 import PasswordInput from "../components/PasswordInput";
 import ImageCropModal from "../components/ImageCropModal";
 import MembershipModal from "../components/MembershipModal";
+import DeleteAccountModal from "../components/DeleteAccountModal";
 import { profileSchema, passwordFormSchema } from "../schemas/profileSchema";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
@@ -41,6 +42,7 @@ export default function Profile() {
   const [rawAvatarSrc, setRawAvatarSrc] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Active slots counts
   const [activeBooksCount, setActiveBooksCount] = useState(0);
@@ -838,10 +840,10 @@ export default function Profile() {
       )}
 
       {/* ============================================================== */}
-      {/* TAB 3: SETTINGS (CHANGE PASSWORD)                              */}
+      {/* TAB 3: SETTINGS (CHANGE PASSWORD & DANGER ZONE)                */}
       {/* ============================================================== */}
       {activeTab === "settings" && (
-        <div style={{ maxWidth: 580 }}>
+        <div style={{ maxWidth: 580, display: "flex", flexDirection: "column", gap: 20 }}>
           <form className="card" onSubmit={savePw} noValidate>
             <h3 style={{ marginTop: 0, fontSize: "1.15rem" }}>Security & Password</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "0.85rem", color: "var(--text-secondary, #666)" }}>
@@ -893,6 +895,58 @@ export default function Profile() {
               </button>
             </div>
           </form>
+
+          {/* Danger Zone: Delete Account (Purchaser Only) */}
+          {user?.role === "purchaser" && (
+            <div
+              className="card"
+              style={{
+                border: "1px solid #fecaca",
+                background: "var(--surface, #ffffff)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: "#fee2e2",
+                    color: "#dc2626",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </div>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#dc2626" }}>Danger Zone</h3>
+              </div>
+
+              <p style={{ margin: "0 0 16px 0", fontSize: "0.85rem", color: "var(--text-secondary, #666)", lineHeight: 1.45 }}>
+                Permanently close your account. All borrowing history, payment records, and active membership benefits will be deleted.
+              </p>
+
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowDeleteModal(true)}
+                style={{
+                  background: "#dc2626",
+                  borderColor: "#dc2626",
+                  color: "#ffffff",
+                }}
+              >
+                Delete Account
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -907,6 +961,13 @@ export default function Profile() {
 
       {showMembershipModal && (
         <MembershipModal onClose={() => setShowMembershipModal(false)} />
+      )}
+
+      {showDeleteModal && (
+        <DeleteAccountModal
+          userEmail={user?.email}
+          onClose={() => setShowDeleteModal(false)}
+        />
       )}
     </>
   );

@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
 import MembershipModal from "./MembershipModal";
+import DeleteAccountModal from "./DeleteAccountModal";
 import ThemeToggle from "./ThemeToggle";
 import { getEffectiveTier } from "../utils/membershipConfig";
 import {
@@ -48,6 +49,7 @@ export default function AppLayout() {
 
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
 
@@ -98,102 +100,117 @@ export default function AppLayout() {
   // Real-time auto sync
   useEffect(() => {
     loadSidebarQuota();
-
-    const handleQuotaEvent = () => {
-      loadSidebarQuota();
-    };
-
-    window.addEventListener("quota-updated", handleQuotaEvent);
-    window.addEventListener("focus", handleQuotaEvent);
-
+    const interval = setInterval(loadSidebarQuota, 60000);
+    const onQuotaUpdated = () => loadSidebarQuota();
+    window.addEventListener("quotaUpdated", onQuotaUpdated);
     return () => {
-      window.removeEventListener("quota-updated", handleQuotaEvent);
-      window.removeEventListener("focus", handleQuotaEvent);
+      clearInterval(interval);
+      window.removeEventListener("quotaUpdated", onQuotaUpdated);
     };
-  }, [location.pathname, loadSidebarQuota]);
+  }, [loadSidebarQuota]);
 
   const handleLogout = async () => {
-    setConfirmLogout(false);
-    setOpen(false);
-    setDropdownOpen(false);
-    await logout();
-    toast.info("Logged out");
-    navigate("/login", { replace: true });
+    try {
+      await logout();
+      toast.success("Logged out successfully");
+      navigate("/login");
+    } catch {
+      toast.error("Logout failed");
+    }
   };
 
   const totalUsed = sidebarCapacity.active + sidebarCapacity.pending;
-  const remaining = tier.maxBooks === Infinity ? Infinity : Math.max(0, tier.maxBooks - totalUsed);
-  const isFull = tier.maxBooks !== Infinity && totalUsed >= tier.maxBooks;
-  const percentage = tier.maxBooks === Infinity ? 10 : Math.min(100, Math.round((totalUsed / tier.maxBooks) * 100));
+  const remaining = Math.max(0, tier.maxBooks - totalUsed);
+  const isFull = tier.tier !== "ultimate" && totalUsed >= tier.maxBooks;
+  const percentage =
+    tier.tier === "ultimate"
+      ? 100
+      : Math.min(100, Math.round((totalUsed / tier.maxBooks) * 100));
 
   const upgradeLabel =
     tier.tier === "free"
-      ? "Upgrade to Premium →"
+      ? "Upgrade to Premium"
       : tier.tier === "premium"
-      ? "Upgrade to Ultimate →"
-      : "Your Plan →";
+      ? "Upgrade to Ultimate"
+      : "Active";
 
   return (
-    <div className="app">
-      <div
-        className={`overlay ${open ? "show" : ""}`}
-        onClick={() => setOpen(false)}
-      />
+    <div className="layout">
+      {open && (
+        <div
+          className="drawer-overlay"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="logo">
-          <span className="logo-mark">
-            <BookIcon size={18} />
-          </span>
-          LibraryHub
+        <div className="sidebar-brand">
+          <Link
+            to={user?.role === "librarian" ? "/librarian" : "/purchaser"}
+            className="brand-link"
+            onClick={() => setOpen(false)}
+          >
+            <span className="brand-logo">
+              <BookIcon />
+            </span>
+            <span className="brand-text">LibraryHub</span>
+          </Link>
         </div>
 
-        <nav className="nav">
-          {links.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-              onClick={() => setOpen(false)}
-            >
-              <item.icon />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+        <nav className="sidebar-nav">
+          {links.map((link) => {
+            const Icon = link.icon;
+            return (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.end}
+                className={({ isActive }) =>
+                  `nav-link ${isActive ? "active" : ""}`
+                }
+                onClick={() => setOpen(false)}
+              >
+                <Icon />
+                <span>{link.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
 
-        {/* Live Borrowing Capacity Widget (Purchaser Only) */}
         {user?.role === "purchaser" && (
           <div
-            className="sidebar-quota-card"
-            style={{
-              margin: "auto 12px 14px 12px",
-              padding: "10px 12px",
-              background: "rgba(92, 107, 192, 0.08)",
-              borderRadius: "10px",
-              border: "1px solid rgba(92, 107, 192, 0.15)",
-              cursor: "pointer",
+            onClick={() => {
+              if (tier.tier !== "ultimate") setShowMembershipModal(true);
             }}
-            onClick={() => setShowMembershipModal(true)}
-            title="Click to view plan limits"
+            style={{
+              margin: "12px 14px",
+              padding: "10px 12px",
+              background: "var(--soft-1, rgba(92,107,192,0.06))",
+              border: "1px solid var(--border, rgba(0,0,0,0.08))",
+              borderRadius: 10,
+              cursor: tier.tier !== "ultimate" ? "pointer" : "default",
+              transition: "transform 0.15s ease",
+            }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
               <span
                 style={{
                   fontSize: "0.75rem",
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
-                  color:
-                    tier.tier === "ultimate"
-                      ? "#d97706"
-                      : tier.tier === "premium"
-                      ? "var(--primary, #5c6bc0)"
-                      : "#6b7280",
+                  color: "var(--text-secondary, #666)",
                 }}
               >
-                {tier.name} Plan
+                {tier.name} Capacity
               </span>
               <span
                 style={{
@@ -249,13 +266,9 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar-right">
-            {/* Theme Switcher */}
             <ThemeToggle />
-
-            {/* Notification Bell */}
             <NotificationBell />
 
-            {/* Clean Profile Dropdown Trigger (Arrow Removed) */}
             <div ref={menuRef} style={{ position: "relative" }}>
               <button
                 type="button"
@@ -295,7 +308,6 @@ export default function AppLayout() {
                 </div>
               </button>
 
-              {/* Modern Dropdown Menu */}
               {dropdownOpen && (
                 <div
                   style={{
@@ -311,7 +323,6 @@ export default function AppLayout() {
                     zIndex: 50,
                   }}
                 >
-                  {/* Header: Name, Email & Role/Plan Badge */}
                   <div style={{ padding: "8px 12px 10px 12px", borderBottom: "1px solid var(--border, #f1f5f9)" }}>
                     <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text, #111)" }}>
                       {user?.name}
@@ -347,9 +358,7 @@ export default function AppLayout() {
                     </div>
                   </div>
 
-                  {/* Menu Items */}
                   <div style={{ padding: "4px 0" }}>
-                    {/* 1. Profile */}
                     <button
                       type="button"
                       className="nav-link"
@@ -381,7 +390,6 @@ export default function AppLayout() {
                       </div>
                     </button>
 
-                    {/* 2. Transaction History (Purchaser Only) */}
                     {user?.role === "purchaser" && (
                       <button
                         type="button"
@@ -416,7 +424,6 @@ export default function AppLayout() {
                       </button>
                     )}
 
-                    {/* 3. Settings */}
                     <button
                       type="button"
                       className="nav-link"
@@ -450,10 +457,9 @@ export default function AppLayout() {
                     </button>
                   </div>
 
-                  {/* Divider */}
                   <div style={{ height: 1, background: "var(--border, #f1f5f9)", margin: "4px 0" }} />
 
-                  {/* 4. Logout */}
+                  {/* Logout */}
                   <button
                     type="button"
                     onClick={() => {
@@ -472,13 +478,48 @@ export default function AppLayout() {
                       cursor: "pointer",
                       fontSize: "0.88rem",
                       fontWeight: 600,
-                      color: "#dc2626",
+                      color: "var(--text, #333)",
                       textAlign: "left",
                     }}
                   >
                     <LogoutIcon size={16} />
                     <span>Logout</span>
                   </button>
+
+                  {/* Delete Account (Purchaser Only) */}
+                  {user?.role === "purchaser" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        setShowDeleteModal(true);
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "9px 12px",
+                        marginTop: 2,
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        fontSize: "0.88rem",
+                        fontWeight: 600,
+                        color: "#dc2626",
+                        textAlign: "left",
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                      <span>Delete Account</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -503,6 +544,13 @@ export default function AppLayout() {
 
       {showMembershipModal && (
         <MembershipModal onClose={() => setShowMembershipModal(false)} />
+      )}
+
+      {showDeleteModal && (
+        <DeleteAccountModal
+          userEmail={user?.email}
+          onClose={() => setShowDeleteModal(false)}
+        />
       )}
     </div>
   );

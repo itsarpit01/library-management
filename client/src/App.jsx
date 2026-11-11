@@ -5,6 +5,7 @@ import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import DeleteAccountConfirm from "./pages/DeleteAccountConfirm";
 import Profile from "./pages/Profile";
 import LibrarianHome from "./pages/LibrarianHome";
 import LibrarianBooks from "./pages/LibrarianBooks";
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/delete-account-confirm" element={<DeleteAccountConfirm />} />
 
       {/* Librarian group */}
       <Route element={<ProtectedRoute roles={["librarian"]} />}>

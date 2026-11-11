@@ -1,12 +1,15 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Issue from "../models/Issue.js";
 import PurchaseRequest from "../models/PurchaseRequest.js";
 import Transaction from "../models/Transaction.js";
+import Notification from "../models/Notification.js";
 import { MEMBERSHIP_TIERS } from "../config/membershipConfig.js";
 import { withOverdueInfo } from "../utils/fine.js";
+import { sendAccountDeletionEmail } from "../utils/mailer.js";
 
 const getEffectiveMembership = (user) => {
   const mem = user.membership || { tier: "free", expiresAt: null };
@@ -49,7 +52,6 @@ export const getMembers = async (req, res) => {
             activeIssuesCount: {
               $sum: { $cond: [{ $eq: ["$status", "issued"] }, 1, 0] },
             },
-            // Sirf unpaid fines ko count karega, paid fines exclude honge
             totalFines: {
               $sum: {
                 $cond: [
@@ -154,7 +156,6 @@ export const getMemberActivity = async (req, res) => {
       PurchaseRequest.find({ requestedBy: id }).sort({ createdAt: -1 }).lean(),
     ]);
 
-    // Issues ko withOverdueInfo ke sath populate karein taaki finePaid status pass ho
     const issues = rawIssues.map(withOverdueInfo);
 
     res.json({
@@ -248,4 +249,197 @@ export const changePassword = async (req, res) => {
   user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
   res.json({ message: "Password changed successfully" });
+};
+
+// GET /api/users/deletion-eligibility (logged-in purchaser)
+export const getDeletionEligibility = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [activeIssues, rawIssues] = await Promise.all([
+      Issue.find({ member: userId, status: "issued" }).select("book title").lean(),
+      Issue.find({ member: userId }).lean(),
+    ]);
+
+    const activeIssuesCount = activeIssues.length;
+
+    // Calculate real-time unpaid fines
+    const issuesWithOverdue = rawIssues.map(withOverdueInfo);
+    const unpaidIssues = issuesWithOverdue.filter(
+      (i) => (i.fine > 0 || (i.currentFine && i.currentFine > 0)) && !i.finePaid
+    );
+    const unpaidFinesCount = unpaidIssues.length;
+    const totalUnpaidFines = unpaidIssues.reduce(
+      (sum, i) => sum + (i.fine || i.currentFine || 0),
+      0
+    );
+
+    const canDelete = activeIssuesCount === 0 && unpaidFinesCount === 0;
+
+    res.json({
+      canDelete,
+      activeIssuesCount,
+      unpaidFinesCount,
+      totalUnpaidFines,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to check deletion eligibility" });
+  }
+};
+
+// POST /api/users/request-account-deletion (logged-in purchaser)
+export const requestAccountDeletion = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.role === "librarian") {
+      return res.status(403).json({ message: "Librarian staff accounts cannot be self-deleted" });
+    }
+
+    // Check active unreturned books
+    const activeBooks = await Issue.countDocuments({ member: user._id, status: "issued" });
+    if (activeBooks > 0) {
+      return res.status(400).json({
+        message: `Cannot delete account: You have ${activeBooks} unreturned borrowed book(s). Please return all books before deleting your account.`,
+      });
+    }
+
+    // Check unpaid fines
+    const rawIssues = await Issue.find({ member: user._id }).lean();
+    const issuesWithOverdue = rawIssues.map(withOverdueInfo);
+    const unpaidFines = issuesWithOverdue.filter(
+      (i) => (i.fine > 0 || (i.currentFine && i.currentFine > 0)) && !i.finePaid
+    );
+
+    if (unpaidFines.length > 0) {
+      const totalFine = unpaidFines.reduce(
+        (sum, i) => sum + (i.fine || i.currentFine || 0),
+        0
+      );
+      return res.status(400).json({
+        message: `Cannot delete account: You have outstanding late fine of ₹${totalFine}. Please settle your fines before deleting your account.`,
+      });
+    }
+
+    // Generate secure cryptographic random token
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    user.accountDeleteToken = hashedToken;
+    user.accountDeleteExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    await user.save();
+
+    await sendAccountDeletionEmail(user.email, user.name, user._id, rawToken);
+
+    res.json({
+      message: `A verification link has been sent to ${user.email}. Please check your inbox within 15 minutes to confirm deletion.`,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message || "Failed to initiate account deletion" });
+  }
+};
+
+// GET /api/users/verify-delete-token/:token (public endpoint for verification page)
+export const verifyDeleteToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token) return res.status(400).json({ message: "Missing deletion token" });
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({
+      accountDeleteToken: hashedToken,
+      accountDeleteExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "This account deletion link is invalid or has expired (valid for 15 minutes). Please request a new deletion link.",
+      });
+    }
+
+    const [activeBooks, rawIssues] = await Promise.all([
+      Issue.countDocuments({ member: user._id, status: "issued" }),
+      Issue.find({ member: user._id }).lean(),
+    ]);
+
+    const issuesWithOverdue = rawIssues.map(withOverdueInfo);
+    const unpaidFines = issuesWithOverdue.filter(
+      (i) => (i.fine > 0 || (i.currentFine && i.currentFine > 0)) && !i.finePaid
+    );
+
+    res.json({
+      valid: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        membership: user.membership?.tier || "free",
+        createdAt: user.createdAt,
+      },
+      hasBlockers: activeBooks > 0 || unpaidFines.length > 0,
+      activeBooks,
+      unpaidFinesCount: unpaidFines.length,
+      totalUnpaidFines: unpaidFines.reduce(
+        (sum, i) => sum + (i.fine || i.currentFine || 0),
+        0
+      ),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to verify deletion link" });
+  }
+};
+
+// POST /api/users/confirm-account-deletion (public endpoint triggered from confirmation page)
+export const confirmAccountDeletion = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Missing deletion token" });
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({
+      accountDeleteToken: hashedToken,
+      accountDeleteExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "This account deletion link is invalid or has expired. Please request a new one.",
+      });
+    }
+
+    // Final blocker check
+    const [activeBooks, rawIssues] = await Promise.all([
+      Issue.countDocuments({ member: user._id, status: "issued" }),
+      Issue.find({ member: user._id }).lean(),
+    ]);
+
+    const issuesWithOverdue = rawIssues.map(withOverdueInfo);
+    const unpaidFines = issuesWithOverdue.filter(
+      (i) => (i.fine > 0 || (i.currentFine && i.currentFine > 0)) && !i.finePaid
+    );
+
+    if (activeBooks > 0 || unpaidFines.length > 0) {
+      return res.status(400).json({
+        message: "Cannot delete account: Outstanding borrowed books or unpaid fines detected.",
+      });
+    }
+
+    // Permanently purge all associated records
+    await Promise.all([
+      PurchaseRequest.deleteMany({ requestedBy: user._id }),
+      Notification.deleteMany({ recipient: user._id }),
+      Transaction.deleteMany({ user: user._id }),
+      Issue.deleteMany({ member: user._id }),
+    ]);
+
+    removeOldAvatar(user.avatar);
+    await User.findByIdAndDelete(user._id);
+
+    res.clearCookie("token");
+    res.json({
+      message: "Your account and all associated data have been permanently deleted.",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to complete account deletion" });
+  }
 };
