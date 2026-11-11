@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
 import NotificationBell from "./NotificationBell";
@@ -18,7 +18,11 @@ import {
   UserIcon,
 } from "./Icons";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
 
 const NAV = {
   librarian: [
@@ -47,6 +51,10 @@ export default function AppLayout() {
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
 
+  // Profile Dropdown state & ref
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const menuRef = useRef(null);
+
   // Active slots in sidebar
   const [sidebarCapacity, setSidebarCapacity] = useState({ active: 0, pending: 0 });
 
@@ -57,6 +65,17 @@ export default function AppLayout() {
   useEffect(() => {
     setAvatarBroken(false);
   }, [user?.avatar]);
+
+  // Click outside listener for dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Load quota for purchaser sidebar widget
   const loadSidebarQuota = useCallback(async () => {
@@ -96,6 +115,7 @@ export default function AppLayout() {
   const handleLogout = async () => {
     setConfirmLogout(false);
     setOpen(false);
+    setDropdownOpen(false);
     await logout();
     toast.info("Logged out");
     navigate("/login", { replace: true });
@@ -106,7 +126,6 @@ export default function AppLayout() {
   const isFull = tier.maxBooks !== Infinity && totalUsed >= tier.maxBooks;
   const percentage = tier.maxBooks === Infinity ? 10 : Math.min(100, Math.round((totalUsed / tier.maxBooks) * 100));
 
-  // Dynamic upgrade call to action based on current active tier
   const upgradeLabel =
     tier.tier === "free"
       ? "Upgrade to Premium →"
@@ -183,12 +202,10 @@ export default function AppLayout() {
                   color: isFull ? "#dc2626" : "var(--text, #333)",
                 }}
               >
-                {/* Ultimate Plan me sirf active issued books ka count dikhega */}
                 {tier.tier === "ultimate" ? `${sidebarCapacity.active} issued` : `${totalUsed} / ${tier.maxBooks}`}
               </span>
             </div>
 
-            {/* Progress bar sirf Free aur Premium ke liye */}
             {tier.tier !== "ultimate" && (
               <div style={{ width: "100%", height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 3, overflow: "hidden" }}>
                 <div
@@ -205,7 +222,6 @@ export default function AppLayout() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, fontSize: "0.7rem", color: "var(--text-secondary, #666)" }}>
               <span>
-                {/* Ultimate plan me pending slot reservation nahi hota, isliye 'Unlimited capacity' */}
                 {tier.tier === "ultimate"
                   ? "Unlimited capacity"
                   : isFull
@@ -233,75 +249,253 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar-right">
+            {/* Theme Toggle (Kept) */}
             <ThemeToggle />
 
-            {/* Pure SVG Notification Bell */}
+            {/* Notification Bell (Kept) */}
             <NotificationBell />
 
-            {/* Topbar Plan Pill */}
-            {user?.role === "purchaser" && (
+            {/* Clean Profile Dropdown Container */}
+            <div ref={menuRef} style={{ position: "relative" }}>
               <button
                 type="button"
-                className="btn btn-sm"
-                onClick={() => setShowMembershipModal(true)}
+                onClick={() => setDropdownOpen((prev) => !prev)}
                 style={{
-                  background:
-                    tier.tier === "ultimate"
-                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
-                      : tier.tier === "premium"
-                      ? "linear-gradient(135deg, #6366f1, #4338ca)"
-                      : "linear-gradient(135deg, #f3e8ff, #ede9fe)",
-                  color: tier.tier === "free" ? "#6d28d9" : "#fff",
-                  border: tier.tier === "free" ? "1.5px solid #a78bfa" : "none",
-                  fontWeight: 700,
-                  fontSize: "0.82rem",
-                  padding: "5px 12px",
-                  borderRadius: "20px",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 10,
+                  background: dropdownOpen ? "var(--soft-2, rgba(92,107,192,0.1))" : "transparent",
+                  border: "1px solid",
+                  borderColor: dropdownOpen ? "var(--border, #e5e7eb)" : "transparent",
+                  borderRadius: 24,
+                  padding: "4px 10px 4px 6px",
                   cursor: "pointer",
+                  transition: "all 0.15s ease",
                 }}
-                title="Click to view or upgrade your membership"
+                title="Account menu"
               >
-                <span>{tier.name} Plan</span>
-                {tier.tier !== "ultimate" && (
-                  <span
-                    style={{
-                      background: tier.tier === "free" ? "#7c3aed" : "rgba(255,255,255,0.25)",
-                      color: "#fff",
-                      fontSize: "0.7rem",
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    Upgrade
+                {avatarSrc && !avatarBroken ? (
+                  <img
+                    className="avatar"
+                    src={avatarSrc}
+                    alt=""
+                    onError={() => setAvatarBroken(true)}
+                    style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <span className="avatar" style={{ width: 34, height: 34, fontSize: "0.85rem" }}>
+                    {user?.name?.[0]?.toUpperCase()}
                   </span>
                 )}
+
+                <div className="user-meta" style={{ textAlign: "left" }}>
+                  <strong style={{ fontSize: "0.88rem", lineHeight: 1.2 }}>{user?.name}</strong>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-secondary, #666)" }}>
+                    {user?.role}
+                  </span>
+                </div>
+
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    color: "var(--text-secondary, #666)",
+                    transform: dropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    marginLeft: 2,
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </button>
-            )}
 
-            <Link to={`/${user?.role}/profile`} className="profile-link" title="My profile">
-              <div className="user-meta">
-                <strong>{user?.name}</strong>
-                <span>{user?.role}</span>
-              </div>
-              {avatarSrc && !avatarBroken ? (
-                <img
-                  className="avatar"
-                  src={avatarSrc}
-                  alt=""
-                  onError={() => setAvatarBroken(true)}
-                  style={{ objectFit: "cover" }}
-                />
-              ) : (
-                <span className="avatar">{user?.name?.[0]?.toUpperCase()}</span>
+              {/* Modern Dropdown Menu */}
+              {dropdownOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 0,
+                    width: 250,
+                    background: "var(--surface, #ffffff)",
+                    border: "1px solid var(--border, #e5e7eb)",
+                    borderRadius: 12,
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06)",
+                    padding: 6,
+                    zIndex: 50,
+                  }}
+                >
+                  {/* Dropdown Header: Name & Plan */}
+                  <div style={{ padding: "8px 12px 10px 12px", borderBottom: "1px solid var(--border, #f1f5f9)" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text, #111)" }}>
+                      {user?.name}
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary, #666)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {user?.email}
+                    </div>
+                    {user?.role === "purchaser" && (
+                      <div style={{ marginTop: 8 }}>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "3px 8px",
+                            borderRadius: 12,
+                            display: "inline-block",
+                            background:
+                              tier.tier === "ultimate"
+                                ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                                : tier.tier === "premium"
+                                ? "linear-gradient(135deg, #6366f1, #4338ca)"
+                                : "rgba(92, 107, 192, 0.1)",
+                            color: tier.tier === "free" ? "var(--primary, #5c6bc0)" : "#ffffff",
+                          }}
+                        >
+                          {tier.name} Plan
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dropdown Items */}
+                  <div style={{ padding: "4px 0" }}>
+                    {/* 1. Profile */}
+                    <button
+                      type="button"
+                      className="nav-link"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        navigate(`/${user?.role}/profile?tab=profile`);
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "9px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        fontSize: "0.88rem",
+                        color: "var(--text, #333)",
+                        textAlign: "left",
+                      }}
+                    >
+                      <UserIcon size={16} />
+                      <div>
+                        <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Profile</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>Plan & details</div>
+                      </div>
+                    </button>
+
+                    {/* 2. Transaction History (Purchaser only) */}
+                    {user?.role === "purchaser" && (
+                      <button
+                        type="button"
+                        className="nav-link"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          navigate(`/${user?.role}/profile?tab=transactions`);
+                        }}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "9px 12px",
+                          border: "none",
+                          background: "transparent",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          fontSize: "0.88rem",
+                          color: "var(--text, #333)",
+                          textAlign: "left",
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="5" width="20" height="14" rx="2" />
+                          <line x1="2" y1="10" x2="22" y2="10" />
+                        </svg>
+                        <div>
+                          <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Transaction History</div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>All payments & fines</div>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* 3. Settings */}
+                    <button
+                      type="button"
+                      className="nav-link"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        navigate(`/${user?.role}/profile?tab=settings`);
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "9px 12px",
+                        border: "none",
+                        background: "transparent",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        fontSize: "0.88rem",
+                        color: "var(--text, #333)",
+                        textAlign: "left",
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      <div>
+                        <div style={{ fontWeight: 600, lineHeight: 1.2 }}>Settings</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-secondary, #666)" }}>Password & security</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{ height: 1, background: "var(--border, #f1f5f9)", margin: "4px 0" }} />
+
+                  {/* 4. Logout */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      setConfirmLogout(true);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "9px 12px",
+                      border: "none",
+                      background: "transparent",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: "0.88rem",
+                      fontWeight: 600,
+                      color: "#dc2626",
+                      textAlign: "left",
+                    }}
+                  >
+                    <LogoutIcon size={16} />
+                    <span>Logout</span>
+                  </button>
+                </div>
               )}
-            </Link>
-
-            <button className="btn btn-soft btn-sm" onClick={() => setConfirmLogout(true)}>
-              <LogoutIcon size={16} /> Logout
-            </button>
+            </div>
           </div>
         </header>
 
