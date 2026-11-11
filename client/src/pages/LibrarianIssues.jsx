@@ -78,7 +78,7 @@ export default function LibrarianIssues() {
   // Real-time Auto-Sync every 8 seconds without hard refresh
   useEffect(() => {
     loadIssues();
-    const interval = setInterval(loadIssues, 8000);
+    const interval = setInterval(loadIssues, 60000);
     return () => clearInterval(interval);
   }, [loadIssues]);
 

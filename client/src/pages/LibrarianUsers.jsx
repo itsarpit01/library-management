@@ -56,7 +56,7 @@ export default function LibrarianUsers() {
   // Real-time Auto-Sync every 8 seconds without hard refresh
   useEffect(() => {
     loadMembers();
-    const interval = setInterval(loadMembers, 8000);
+    const interval = setInterval(loadMembers, 60000);
     return () => clearInterval(interval);
   }, [loadMembers]);
 
