@@ -8,14 +8,13 @@ const getTransporter = () => {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (SMTP_USER && SMTP_PASS) {
-    // Strip any accidental spaces from Google 16-character app password
     const cleanPass = SMTP_PASS.replace(/\s+/g, "");
     const port = Number(SMTP_PORT) || 587;
 
     transporter = nodemailer.createTransport({
       host: SMTP_HOST || "smtp.gmail.com",
       port: port,
-      secure: port === 465, // false for port 587 (uses STARTTLS)
+      secure: port === 465,
       auth: {
         user: SMTP_USER,
         pass: cleanPass,
@@ -34,8 +33,12 @@ const getTransporter = () => {
 };
 
 export const verifyMailer = async () => {
+  if (process.env.BREVO_API_KEY) {
+    console.log("Brevo HTTP Mailer ready (Port 443 - Production Ready)");
+    return;
+  }
   if (process.env.RESEND_API_KEY) {
-    console.log("Resend HTTP Mailer ready (Port 443 - Bypasses cloud SMTP blocks)");
+    console.log("Resend HTTP Mailer ready (Port 443)");
     return;
   }
   const t = getTransporter();
@@ -54,7 +57,6 @@ export const verifyMailer = async () => {
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-// Helper to sanitize CLIENT_URL even if comma-separated values exist
 const getCleanClientUrl = () => {
   const rawUrls = (process.env.CLIENT_URL || "https://library-management-iota-two.vercel.app")
     .split(",")
@@ -64,7 +66,49 @@ const getCleanClientUrl = () => {
   return selected.replace(/\/+$/, "");
 };
 
-// Helper for sending via Resend HTTPS API if key is present
+// Brevo HTTP API (Port 443 - works on Railway & sends to ANY recipient)
+const sendViaBrevo = async ({ to, toName, subject, html, text }) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return false;
+
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || process.env.MAIL_FROM;
+  if (!senderEmail) {
+    throw new Error("BREVO_SENDER_EMAIL is missing in Railway variables.");
+  }
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": apiKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        name: "LibraryHub",
+        email: senderEmail,
+      },
+      to: [
+        {
+          email: to,
+          name: toName || to,
+        },
+      ],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || `Brevo API error: ${res.statusText}`);
+  }
+
+  return true;
+};
+
+// Resend HTTP API fallback
 const sendViaResend = async ({ to, subject, html, text }) => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return false;
@@ -76,9 +120,7 @@ const sendViaResend = async ({ to, subject, html, text }) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: process.env.MAIL_FROM_NAME
-        ? `${process.env.MAIL_FROM_NAME} <onboarding@resend.dev>`
-        : "LibraryHub <onboarding@resend.dev>",
+      from: "LibraryHub <onboarding@resend.dev>",
       to: [to],
       subject,
       html,
@@ -105,6 +147,11 @@ export const sendOtpEmail = async (to, name, otp) => {
       <p style="font-size:32px;letter-spacing:8px;font-weight:700;background:#f4f0ff;padding:12px;text-align:center;border-radius:8px">${otp}</p>
       <p style="color:#6b6784;font-size:13px">This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>
     </div>`;
+
+  if (process.env.BREVO_API_KEY) {
+    await sendViaBrevo({ to, toName: name, subject, html, text });
+    return;
+  }
 
   if (process.env.RESEND_API_KEY) {
     await sendViaResend({ to, subject, html, text });
@@ -194,7 +241,19 @@ If you did not request this, you can safely ignore this email. Your account rema
     </div>
   `;
 
-  // Send via Resend HTTPS API if key exists (Bypasses all cloud SMTP port blocks)
+  // Priority 1: Brevo HTTP API (Sends to ANY user on Railway without port blocking)
+  if (process.env.BREVO_API_KEY) {
+    await sendViaBrevo({
+      to,
+      toName: name,
+      subject,
+      html: htmlContent,
+      text: textContent,
+    });
+    return;
+  }
+
+  // Priority 2: Resend HTTP API
   if (process.env.RESEND_API_KEY) {
     await sendViaResend({
       to,
@@ -205,10 +264,10 @@ If you did not request this, you can safely ignore this email. Your account rema
     return;
   }
 
-  // Fallback to Nodemailer SMTP
+  // Priority 3: Localhost SMTP fallback
   const t = getTransporter();
   if (!t) {
-    if (process.env.NODE_ENV === "production") throw new Error("Email service is not configured. Add SMTP or RESEND_API_KEY in Railway.");
+    if (process.env.NODE_ENV === "production") throw new Error("Email service is not configured. Add BREVO_API_KEY in Railway.");
     console.log(`[DEV] Deletion link: ${confirmUrl}`);
     return;
   }
